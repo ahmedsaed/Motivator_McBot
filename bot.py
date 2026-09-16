@@ -28,9 +28,10 @@ log = logging.getLogger("motivator")
 # Maximum tweet length
 MAX_LENGTH = 280
 
-# X retired the v1.1 media/upload endpoint in March 2025; v2 is the supported
-# route. Tweepy still targets v1.1, so we upload here and fall back to tweepy.
+# X retired the v1.1 media/upload endpoint in March 2025 and tweepy still
+# targets it, so media is uploaded here against v2 rather than through tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
+USERS_ME_URL = "https://api.x.com/2/users/me"
 # X's media endpoint returns 503 "over capacity" intermittently, so retry
 # before giving up. Status codes worth another attempt:
 MEDIA_UPLOAD_ATTEMPTS = 4
@@ -69,7 +70,6 @@ class Settings:
     output_path: Path = Path("images/output_image.jpg")
     quotes_file: Path = QUOTES_FILE
     quote_api_url: str = ""
-    allow_text_only: bool = True
 
     @classmethod
     def from_env(cls):
@@ -95,8 +95,6 @@ class Settings:
             output_path=Path(value("OUTPUT_PATH", default="images/output_image.jpg")),
             quotes_file=Path(value("QUOTES_FILE", default=str(QUOTES_FILE))),
             quote_api_url=value("QUOTE_API_URL"),
-            allow_text_only=value("ALLOW_TEXT_ONLY", default="true").lower()
-            not in {"0", "false", "no"},
         )
 
     def missing_credentials(self):
@@ -452,21 +450,10 @@ def upload_media(settings, image_path):
         )
         time.sleep(delay)
 
-    # X retired v1.1 media/upload in March 2025, so this is very likely to fail
-    # too. It stays as a last resort for accounts that still have access.
-    log.info("Falling back to the v1.1 media upload endpoint")
-    auth = tweepy.OAuth1UserHandler(
-        consumer_key=settings.api_key,
-        consumer_secret=settings.api_secret,
-        access_token=settings.access_token,
-        access_token_secret=settings.access_token_secret,
+    raise MediaUploadError(
+        f"{MEDIA_UPLOAD_URL} did not accept the image after "
+        f"{MEDIA_UPLOAD_ATTEMPTS} attempts"
     )
-    try:
-        return tweepy.API(auth).media_upload(str(image_path)).media_id
-    except tweepy.TweepyException as error:
-        raise MediaUploadError(
-            f"v2 upload did not succeed and the retired v1.1 endpoint gave: {error}"
-        ) from error
 
 
 def post_tweet(settings, body, image_path):
@@ -479,14 +466,7 @@ def post_tweet(settings, body, image_path):
         access_token_secret=settings.access_token_secret,
     )
 
-    try:
-        media_id = upload_media(settings, image_path)
-    except MediaUploadError as error:
-        if not settings.allow_text_only:
-            raise
-        log.warning("Posting without the image: %s", error)
-        return client.create_tweet(text=body)
-
+    media_id = upload_media(settings, image_path)
     return client.create_tweet(text=body, media_ids=[media_id])
 
 
@@ -567,6 +547,79 @@ def sleep_until(target, tz):
         time.sleep(min(remaining, 900))
 
 
+def run_check(settings):
+    """Probe the X API and report what works, without posting anything.
+
+    A 503 on users/me as well as on media upload points at the account or its
+    billing state rather than at anything media-specific: X moved to
+    pay-per-use in February 2026 and several people have reported persistent
+    503s across v2 endpoints afterwards. A 200 there with a 503 on the upload
+    narrows it to the media endpoint.
+    """
+    missing = settings.missing_credentials()
+    if missing:
+        log.error("Missing required credentials: %s", ", ".join(missing))
+        return 1
+
+    oauth = OAuth1Session(
+        client_key=settings.api_key,
+        client_secret=settings.api_secret,
+        resource_owner_key=settings.access_token,
+        resource_owner_secret=settings.access_token_secret,
+    )
+
+    log.info("GET %s", USERS_ME_URL)
+    try:
+        response = oauth.get(USERS_ME_URL, timeout=30)
+        log.info("  -> %s %s", response.status_code, response.text[:300])
+        identity_ok = response.ok
+    except requests.RequestException as error:
+        log.error("  -> request failed: %s", error)
+        identity_ok = False
+
+    log.info("Rendering a throwaway image to upload")
+    image_path = setup_image(
+        "Diagnostic upload, not posted",
+        None,
+        Path(tempfile.gettempdir()) / "motivator_check.jpg",
+        settings.font_path,
+    )
+
+    log.info("POST %s", MEDIA_UPLOAD_URL)
+    try:
+        with open(image_path, "rb") as handle:
+            response = oauth.post(
+                MEDIA_UPLOAD_URL,
+                files={"media": (image_path.name, handle, "image/jpeg")},
+                data={"media_category": "tweet_image"},
+                timeout=60,
+            )
+        log.info("  -> %s %s", response.status_code, response.text[:300])
+        upload_ok = response.ok
+    except requests.RequestException as error:
+        log.error("  -> request failed: %s", error)
+        upload_ok = False
+
+    log.info("-" * 60)
+    if identity_ok and upload_ok:
+        log.info("Both calls succeeded; media upload is working.")
+    elif identity_ok:
+        log.info(
+            "Credentials work and the v2 API answers, but media upload does not. "
+            "The problem is specific to the media endpoint."
+        )
+    else:
+        log.info(
+            "users/me did not succeed either, so this is not media-specific. "
+            "Check the app's access level and billing in the developer portal: "
+            "a 401 means bad keys, a 403 means the app lacks the access, and a "
+            "503 on every v2 endpoint usually means the project is not on a "
+            "working plan."
+        )
+
+    return 0 if (identity_ok and upload_ok) else 1
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -596,6 +649,11 @@ def parse_args(argv=None):
         action="store_true",
         help="post immediately and exit, ignoring --at and --interval",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="probe the X API and report what works, without posting",
+    )
     return parser.parse_args(argv)
 
 
@@ -610,6 +668,9 @@ def main(argv=None):
     settings = Settings.from_env()
     if args.output:
         settings.output_path = args.output
+
+    if args.check:
+        return run_check(settings)
 
     if not args.dry_run:
         missing = settings.missing_credentials()

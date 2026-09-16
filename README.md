@@ -25,7 +25,6 @@ The four X credentials are required; everything else is optional.
 | `OUTPUT_PATH` | no | Where the rendered image is written |
 | `QUOTES_FILE` | no | Path to the quote dataset (default `data/quotes.json`) |
 | `QUOTE_API_URL` | no | Fetch quotes from a remote API, using the dataset as fallback |
-| `ALLOW_TEXT_ONLY` | no | Post without the image if media upload fails (default `true`) |
 | `TZ` | no | Timezone for `POST_AT` and log timestamps |
 | `POST_AT` | no | `HH:MM` local time to post daily; the container schedules itself |
 | `POST_INTERVAL_SECONDS` | no | Post every N seconds instead of at a set time — see [Scheduling](#scheduling) |
@@ -231,12 +230,22 @@ to Tweepy's v1.1 path if that fails. Posting itself goes through Tweepy's v2
 client. The free API tier allows a limited number of posts per month, which is
 ample for one post a day.
 
-`POST /2/media/upload` returns 503 intermittently — X's own status body says
-"Service Unavailable", and developers have reported it as an over-capacity error
-on and off through 2025 and 2026. The bot retries four times with a growing
-delay (2s, 4s, 8s) before giving up. If the upload still fails it posts the quote
-without the image rather than skipping the day entirely; set
-`ALLOW_TEXT_ONLY=false` to make a failed upload abort the post instead.
+`POST /2/media/upload` returns 503 for some accounts. The bot retries four
+times with a growing delay (2s, 4s, 8s) and then fails the run — it does not
+fall back to v1.1, which X retired, and it does not post without the image.
+
+If posting fails, `--check` probes the API without posting anything:
+
+```bash
+docker compose run --rm motivator --check
+```
+
+It calls `GET /2/users/me` and then attempts a media upload, printing the status
+and body of each. A 503 on both is not media-specific: X replaced its tiered
+plans with pay-per-use in February 2026, and persistent 503s across v2 endpoints
+have been reported by accounts whose plan or billing is not in a working state.
+A 200 on `users/me` with a 503 on the upload narrows the problem to the media
+endpoint. A 401 means the keys are wrong; a 403 means the app lacks the access.
 
 ## Repository layout
 
