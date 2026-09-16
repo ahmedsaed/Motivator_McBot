@@ -1,0 +1,13 @@
+services:
+  motivator:
+    build: .
+    image: ghcr.io/ahmedsaed/motivator_mcbot:latest
+    container_name: motivator-mcbot
+    env_file: .env
+    environment:
+      # Post once every 24h. Remove this to make the container post once and exit.
+      POST_INTERVAL_SECONDS: "${POST_INTERVAL_SECONDS:-86400}"
+    restart: unless-stopped
+    volumes:
+      # Keeps the most recently rendered image visible on the host.
+      - ./images:/app/images
