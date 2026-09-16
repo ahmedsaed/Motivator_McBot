@@ -31,6 +31,10 @@ MAX_LENGTH = 280
 # X retired the v1.1 media/upload endpoint in March 2025; v2 is the supported
 # route. Tweepy still targets v1.1, so we upload here and fall back to tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
+# X's media endpoint returns 503 "over capacity" intermittently, so retry
+# before giving up. Status codes worth another attempt:
+MEDIA_UPLOAD_ATTEMPTS = 4
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 # api.quotable.io is defunct, so quotes come from a local dataset built by
 # scripts/fetch_quotes.py. Set QUOTE_API_URL to use a remote source instead.
@@ -65,6 +69,7 @@ class Settings:
     output_path: Path = Path("images/output_image.jpg")
     quotes_file: Path = QUOTES_FILE
     quote_api_url: str = ""
+    allow_text_only: bool = True
 
     @classmethod
     def from_env(cls):
@@ -90,6 +95,8 @@ class Settings:
             output_path=Path(value("OUTPUT_PATH", default="images/output_image.jpg")),
             quotes_file=Path(value("QUOTES_FILE", default=str(QUOTES_FILE))),
             quote_api_url=value("QUOTE_API_URL"),
+            allow_text_only=value("ALLOW_TEXT_ONLY", default="true").lower()
+            not in {"0", "false", "no"},
         )
 
     def missing_credentials(self):
@@ -382,8 +389,45 @@ def save_canvas(canvas, output_path):
     return fallback
 
 
+class MediaUploadError(Exception):
+    """Raised when the image could not be uploaded to X."""
+
+
+def upload_media_v2(oauth, image_path):
+    """One POST to the v2 media endpoint. Returns (media_id, should_retry)."""
+    try:
+        with open(image_path, "rb") as handle:
+            response = oauth.post(
+                MEDIA_UPLOAD_URL,
+                files={"media": (image_path.name, handle, "image/jpeg")},
+                data={"media_category": "tweet_image"},
+                timeout=60,
+            )
+    except requests.RequestException as error:
+        log.warning("v2 media upload errored: %s", error)
+        return None, True
+
+    if response.ok:
+        try:
+            payload = response.json()
+        except ValueError:
+            log.warning("v2 media upload returned unparseable JSON")
+            return None, False
+        payload = payload.get("data", payload)
+        media_id = payload.get("id") or payload.get("media_id_string")
+        if media_id:
+            return media_id, False
+        log.warning("v2 media upload response had no media id: %s", response.text[:200])
+        return None, False
+
+    log.warning(
+        "v2 media upload failed (%s): %s", response.status_code, response.text[:200]
+    )
+    return None, response.status_code in RETRYABLE_STATUS
+
+
 def upload_media(settings, image_path):
-    """Upload the image via the X v2 media endpoint, falling back to v1.1."""
+    """Upload the image to X, retrying the v2 endpoint before trying v1.1."""
     oauth = OAuth1Session(
         client_key=settings.api_key,
         client_secret=settings.api_secret,
@@ -391,27 +435,25 @@ def upload_media(settings, image_path):
         resource_owner_secret=settings.access_token_secret,
     )
 
-    try:
-        with open(image_path, "rb") as handle:
-            response = oauth.post(
-                MEDIA_UPLOAD_URL,
-                files={"media": handle},
-                data={"media_category": "tweet_image"},
-                timeout=60,
-            )
-        if response.ok:
-            payload = response.json()
-            payload = payload.get("data", payload)
-            media_id = payload.get("id") or payload.get("media_id_string")
-            if media_id:
-                log.info("Uploaded media via v2 endpoint (id=%s)", media_id)
-                return media_id
-        log.warning(
-            "v2 media upload failed (%s): %s", response.status_code, response.text[:200]
-        )
-    except requests.RequestException as error:
-        log.warning("v2 media upload errored: %s", error)
+    for attempt in range(1, MEDIA_UPLOAD_ATTEMPTS + 1):
+        media_id, should_retry = upload_media_v2(oauth, image_path)
+        if media_id:
+            log.info("Uploaded media via v2 endpoint (id=%s)", media_id)
+            return media_id
+        if not should_retry or attempt == MEDIA_UPLOAD_ATTEMPTS:
+            break
 
+        delay = 2**attempt
+        log.info(
+            "Retrying v2 media upload in %ss (attempt %s of %s)",
+            delay,
+            attempt + 1,
+            MEDIA_UPLOAD_ATTEMPTS,
+        )
+        time.sleep(delay)
+
+    # X retired v1.1 media/upload in March 2025, so this is very likely to fail
+    # too. It stays as a last resort for accounts that still have access.
     log.info("Falling back to the v1.1 media upload endpoint")
     auth = tweepy.OAuth1UserHandler(
         consumer_key=settings.api_key,
@@ -419,7 +461,12 @@ def upload_media(settings, image_path):
         access_token=settings.access_token,
         access_token_secret=settings.access_token_secret,
     )
-    return tweepy.API(auth).media_upload(str(image_path)).media_id
+    try:
+        return tweepy.API(auth).media_upload(str(image_path)).media_id
+    except tweepy.TweepyException as error:
+        raise MediaUploadError(
+            f"v2 upload did not succeed and the retired v1.1 endpoint gave: {error}"
+        ) from error
 
 
 def post_tweet(settings, body, image_path):
@@ -432,7 +479,14 @@ def post_tweet(settings, body, image_path):
         access_token_secret=settings.access_token_secret,
     )
 
-    media_id = upload_media(settings, image_path)
+    try:
+        media_id = upload_media(settings, image_path)
+    except MediaUploadError as error:
+        if not settings.allow_text_only:
+            raise
+        log.warning("Posting without the image: %s", error)
+        return client.create_tweet(text=body)
+
     return client.create_tweet(text=body, media_ids=[media_id])
 
 
