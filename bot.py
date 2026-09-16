@@ -12,9 +12,11 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, time as clock_time, timedelta
 from io import BytesIO
 from pathlib import Path
 from random import choice
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 import tweepy
@@ -464,6 +466,53 @@ def run_once(settings, dry_run=False):
     return response
 
 
+def local_timezone():
+    """The zone named by TZ, falling back to whatever the system reports."""
+    name = os.environ.get("TZ")
+    if name:
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            log.warning("Ignoring unusable TZ=%s (%s)", name, error)
+
+    return datetime.now().astimezone().tzinfo
+
+
+def parse_post_at(value):
+    """Parse a HH:MM string into a time, raising ValueError on anything else."""
+    try:
+        hour, minute = (int(part) for part in value.strip().split(":"))
+        return clock_time(hour=hour, minute=minute)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"expected HH:MM, got {value!r}") from error
+
+
+def next_run_at(at_time, tz, now=None):
+    """The next datetime matching at_time in tz, today or tomorrow."""
+    now = now or datetime.now(tz)
+    target = datetime.combine(now.date(), at_time, tzinfo=tz)
+    if target.replace(tzinfo=None) <= now.replace(tzinfo=None):
+        target = datetime.combine(now.date() + timedelta(days=1), at_time, tzinfo=tz)
+
+    return target
+
+
+def sleep_until(target, tz):
+    """Sleep until the local clock reads target.
+
+    Everything here compares wall-clock time with the zone stripped, so the bot
+    posts at the same local time year round: across a DST change the real
+    interval is 23 or 25 hours, not 24. The clock is re-read on every pass so a
+    change of offset mid-sleep is picked up rather than slept through.
+    """
+    wanted = target.replace(tzinfo=None)
+    while True:
+        remaining = (wanted - datetime.now(tz).replace(tzinfo=None)).total_seconds()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 900))
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -477,10 +526,21 @@ def parse_args(argv=None):
         help="where to write the rendered image (default: images/output_image.jpg)",
     )
     parser.add_argument(
+        "--at",
+        default=os.environ.get("POST_AT", ""),
+        metavar="HH:MM",
+        help="keep running and post at this local time every day (see TZ)",
+    )
+    parser.add_argument(
         "--interval",
         type=int,
         default=int(os.environ.get("POST_INTERVAL_SECONDS", "0")),
-        help="if set, keep running and post every N seconds instead of exiting",
+        help="keep running and post every N seconds instead of exiting",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="post immediately and exit, ignoring --at and --interval",
     )
     return parser.parse_args(argv)
 
@@ -503,19 +563,36 @@ def main(argv=None):
             log.error("Missing required credentials: %s", ", ".join(missing))
             return 1
 
+    at_time = None
+    if args.at and not args.once:
+        try:
+            at_time = parse_post_at(args.at)
+        except ValueError as error:
+            log.error("Invalid --at/POST_AT: %s", error)
+            return 1
+
+    tz = local_timezone()
+    scheduled = bool(at_time) or (bool(args.interval) and not args.once)
+
     while True:
+        if at_time:
+            target = next_run_at(at_time, tz)
+            log.info("Next post at %s", target.strftime("%Y-%m-%d %H:%M %Z"))
+            sleep_until(target, tz)
+
         try:
             run_once(settings, dry_run=args.dry_run)
         except Exception:
             log.exception("Run failed")
-            if not args.interval:
+            if not scheduled:
                 return 1
 
-        if not args.interval:
+        if not scheduled:
             return 0
 
-        log.info("Sleeping %s seconds until the next post", args.interval)
-        time.sleep(args.interval)
+        if not at_time:
+            log.info("Sleeping %s seconds until the next post", args.interval)
+            time.sleep(args.interval)
 
 
 if __name__ == "__main__":

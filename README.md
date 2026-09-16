@@ -25,8 +25,9 @@ The four X credentials are required; everything else is optional.
 | `OUTPUT_PATH` | no | Where the rendered image is written |
 | `QUOTES_FILE` | no | Path to the quote dataset (default `data/quotes.json`) |
 | `QUOTE_API_URL` | no | Fetch quotes from a remote API, using the dataset as fallback |
-| `TZ` | no | Timezone for log timestamps |
-| `POST_INTERVAL_SECONDS` | no | Keep running and post every N seconds. Prefer a real scheduler — see [Scheduling](#scheduling) |
+| `TZ` | no | Timezone for `POST_AT` and log timestamps |
+| `POST_AT` | no | `HH:MM` local time to post daily; the container schedules itself |
+| `POST_INTERVAL_SECONDS` | no | Post every N seconds instead of at a set time — see [Scheduling](#scheduling) |
 
 An existing `config.py` from the original version is still read, so old checkouts
 keep working without changes.
@@ -138,20 +139,24 @@ instead — see [Scheduling](#scheduling).
 git clone https://github.com/ahmedsaed/Motivator_McBot.git
 cd Motivator_McBot
 cp .env.example .env && $EDITOR .env
-docker compose run --rm motivator --dry-run   # renders, posts nothing
+docker compose run --rm motivator --once --dry-run   # check it works
+docker compose up -d                                 # start the scheduler
+docker compose logs -f
 ```
 
-The container posts once and exits, so the schedule comes from the host — see
-[Scheduling](#scheduling) below.
+The container schedules itself and posts daily at `POST_AT` — see
+[Scheduling](#scheduling).
 
 ### 3. Local checkout without Docker
 
-Use `./setup.sh` to create the venv, then point the units in
-[Scheduling](#scheduling) at `run.sh` instead of `docker compose`:
+Use `./setup.sh` to create the venv, then run the bot with the same flags:
 
-```ini
-ExecStart=/srv/Motivator_McBot/run.sh
+```bash
+POST_AT=08:00 TZ=Africa/Cairo ./.venv/bin/python bot.py
 ```
+
+`run.sh` is a thin cron wrapper for the same thing if you would rather schedule
+it from the host.
 
 ### Verifying a deployment
 
@@ -166,72 +171,56 @@ ExecStart=/srv/Motivator_McBot/run.sh
 
 ## Scheduling
 
-The container posts once and exits. Drive it from a scheduler that understands
-timezones rather than `POST_INTERVAL_SECONDS`, which just sleeps between posts
-and drifts away from any wall-clock time you had in mind.
+The container schedules itself. Set `POST_AT` to a `HH:MM` local time and `TZ`
+to your zone, and it posts once a day at that time, sleeping in between — no
+host cron, no systemd, no Docker socket. This is what `docker-compose.yml` does
+by default (08:00 `Africa/Cairo`).
 
-Set `TZ` in `docker-compose.yml` to keep log timestamps readable (it defaults to
-`Africa/Cairo`). `TZ` does not decide when the bot posts; the host scheduler does.
-
-### systemd timer
-
-`OnCalendar` takes an IANA timezone, so daylight saving is handled for you. Egypt
-switches between UTC+2 and UTC+3, which would shift a hardcoded UTC cron by an
-hour twice a year.
-
-```ini
-# /etc/systemd/system/motivator.service
-[Unit]
-Description=Motivator McBot
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=/srv/Motivator_McBot
-ExecStart=/usr/bin/docker compose run --rm motivator
-```
-
-```ini
-# /etc/systemd/system/motivator.timer
-[Unit]
-Description=Post a motivational quote at 08:00 Cairo time
-
-[Timer]
-OnCalendar=*-*-* 08:00:00 Africa/Cairo
-Persistent=true
-
-[Install]
-WantedBy=timers.target
+```yaml
+environment:
+  TZ: Africa/Cairo
+  POST_AT: "08:00"
+restart: unless-stopped
 ```
 
 ```bash
-systemd-analyze calendar "*-*-* 08:00:00 Africa/Cairo"   # check before enabling
-sudo systemctl daemon-reload
-sudo systemctl enable --now motivator.timer
-systemctl list-timers motivator.timer
+docker compose up -d
+docker compose logs -f     # "Next post at 2026-09-17 08:00 EEST"
 ```
 
-Run `systemd-analyze calendar` first: the timezone suffix needs a recent systemd,
-and that command prints the next elapse if your version supports it. If it errors,
-set the host timezone with `timedatectl set-timezone Africa/Cairo` and use a bare
-`OnCalendar=*-*-* 08:00:00`. `Persistent=true` runs a missed post on the next
-boot — drop it if you would rather skip.
+`restart: unless-stopped` brings the scheduler back after a reboot or a crash.
+On start it logs the next post time, so you can confirm the schedule without
+waiting for it.
 
-### cron
+The time is a **local wall-clock** time: the bot posts at 08:00 whether or not
+daylight saving is in effect, so the real interval is 23 or 25 hours across a
+DST change rather than 24. Egypt switches between UTC+2 and UTC+3, which is
+exactly the case a fixed UTC schedule gets wrong.
 
-`CRON_TZ` must be at the top of the crontab, before the job line. It is supported
-by cronie and Vixie cron (Debian, Ubuntu, RHEL).
+A missed post is skipped, not caught up — if the host is down at 08:00 the bot
+posts at 08:00 the next day.
 
-```cron
-CRON_TZ=Africa/Cairo
-0 8 * * * cd /srv/Motivator_McBot && docker compose run --rm motivator >> /var/log/motivator.log 2>&1
+### One-off runs
+
+`--once` posts immediately and exits, ignoring `POST_AT`, which is what you want
+for a smoke test on a machine whose compose file sets a schedule:
+
+```bash
+docker compose run --rm motivator --once --dry-run   # renders, posts nothing
+docker compose run --rm motivator --once             # posts right now
 ```
 
-If you previously ran `docker compose up -d` with `POST_INTERVAL_SECONDS` set,
-run `docker compose down` first or the old container keeps posting alongside the
-timer. The same goes for the `post.yml` workflow — disable it from the Actions
-tab if the server is doing the posting.
+### Other options
+
+`POST_INTERVAL_SECONDS` posts every N seconds instead of at a set time. It
+drifts relative to the clock, so prefer `POST_AT` unless you genuinely want a
+fixed interval.
+
+To drive the schedule from the host instead, leave `POST_AT` unset and run
+`docker compose run --rm motivator --once` from cron (`CRON_TZ=Africa/Cairo` at
+the top of the crontab) or a systemd timer
+(`OnCalendar=*-*-* 08:00:00 Africa/Cairo`; check your systemd accepts the
+timezone suffix with `systemd-analyze calendar` first).
 
 ## Notes on the X API
 

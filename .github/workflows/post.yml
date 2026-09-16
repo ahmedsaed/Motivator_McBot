@@ -34,4 +34,4 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
           UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
-        run: python bot.py ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python bot.py --once ${{ inputs.dry_run && '--dry-run' || '' }}

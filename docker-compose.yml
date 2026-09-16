@@ -5,9 +5,11 @@ services:
     container_name: motivator-mcbot
     env_file: .env
     environment:
-      # Log timestamps in local time. The posting schedule itself comes from the
-      # host (systemd timer or cron) — see "Scheduling" in the README.
+      # The container schedules itself: it posts at POST_AT in the TZ below,
+      # every day, and sleeps in between. No host cron or systemd needed.
       TZ: "${TZ:-Africa/Cairo}"
+      POST_AT: "${POST_AT:-08:00}"
+    restart: unless-stopped
     volumes:
       # A named volume keeps the ownership the image sets, so the unprivileged
       # container user can write to it. A bind mount such as ./images:/app/images
