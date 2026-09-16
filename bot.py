@@ -5,15 +5,18 @@ Configuration comes from environment variables (see .env.example). A legacy
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, time as clock_time, timedelta
 from io import BytesIO
 from pathlib import Path
 from random import choice
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 import tweepy
@@ -29,7 +32,9 @@ MAX_LENGTH = 280
 # route. Tweepy still targets v1.1, so we upload here and fall back to tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
 
-QUOTE_API_URL = "https://api.quotable.io/random"
+# api.quotable.io is defunct, so quotes come from a local dataset built by
+# scripts/fetch_quotes.py. Set QUOTE_API_URL to use a remote source instead.
+QUOTES_FILE = Path(__file__).resolve().parent / "data" / "quotes.json"
 UNSPLASH_API_URL = "https://api.unsplash.com/photos/random"
 
 IMAGE_SIZE = (1200, 600)
@@ -58,6 +63,8 @@ class Settings:
     image_query: str = "mountains lake nature"
     font_path: str = ""
     output_path: Path = Path("images/output_image.jpg")
+    quotes_file: Path = QUOTES_FILE
+    quote_api_url: str = ""
 
     @classmethod
     def from_env(cls):
@@ -81,6 +88,8 @@ class Settings:
             image_query=value("IMAGE_QUERY", default="mountains lake nature"),
             font_path=value("FONT_PATH"),
             output_path=Path(value("OUTPUT_PATH", default="images/output_image.jpg")),
+            quotes_file=Path(value("QUOTES_FILE", default=str(QUOTES_FILE))),
+            quote_api_url=value("QUOTE_API_URL"),
         )
 
     def missing_credentials(self):
@@ -158,23 +167,57 @@ def generate_random_color():
     return "#" + "".join(choice("0123456789ABCDEF") for _ in range(6))
 
 
-def fetch_quote():
-    """Fetch a quote, falling back to the built-in list if the API is down."""
-    params = {
-        "tags": "inspirational|success|motivational|leadership",
-        "maxLength": 220,
-    }
-
-    log.info("Fetching quote")
+def load_quotes(quotes_file):
+    """Return the quote strings from the bundled dataset, or [] if unusable."""
     try:
-        response = requests.get(QUOTE_API_URL, params=params, timeout=HTTP_TIMEOUT)
+        with open(quotes_file, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError) as error:
+        log.warning("Couldn't read %s: %s", quotes_file, error)
+        return []
+
+    quotes = [
+        q["content"] for q in payload.get("quotes", []) if (q or {}).get("content")
+    ]
+    if not quotes:
+        log.warning("No quotes in %s", quotes_file)
+
+    return quotes
+
+
+def fetch_quote_from_api(url):
+    """Fetch one quote from a remote API. Returns None on any failure."""
+    log.info("Fetching quote from %s", url)
+    try:
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        quote = response.json()["content"]
-        log.info("Quote fetched successfully")
-        return quote
-    except (requests.RequestException, ValueError, KeyError) as error:
-        log.warning("Couldn't fetch quote (%s); using built-in list", error)
-        return get_hard_coded_quote()
+        payload = response.json()
+        if isinstance(payload, list) and payload:
+            payload = payload[0]
+        quote = payload.get("content") or payload.get("q") or payload.get("quote")
+        if quote:
+            return quote.strip()
+        log.warning("No quote field in the response from %s", url)
+    except (requests.RequestException, ValueError, AttributeError) as error:
+        log.warning("Couldn't fetch quote from %s: %s", url, error)
+
+    return None
+
+
+def fetch_quote(settings):
+    """Pick a quote: the optional remote API first, then the local dataset."""
+    if settings.quote_api_url:
+        quote = fetch_quote_from_api(settings.quote_api_url)
+        if quote:
+            return quote
+        log.info("Falling back to the local dataset")
+
+    quotes = load_quotes(settings.quotes_file)
+    if quotes:
+        return choice(quotes)
+
+    log.warning("Using the built-in quote list")
+    return get_hard_coded_quote()
 
 
 def fetch_background_image(settings):
@@ -406,7 +449,7 @@ def build_tweet_body(quote, photographer):
 
 
 def run_once(settings, dry_run=False):
-    quote = fetch_quote()
+    quote = fetch_quote(settings)
     background_image_url, photographer = fetch_background_image(settings)
 
     image_path = setup_image(
@@ -423,6 +466,53 @@ def run_once(settings, dry_run=False):
     return response
 
 
+def local_timezone():
+    """The zone named by TZ, falling back to whatever the system reports."""
+    name = os.environ.get("TZ")
+    if name:
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            log.warning("Ignoring unusable TZ=%s (%s)", name, error)
+
+    return datetime.now().astimezone().tzinfo
+
+
+def parse_post_at(value):
+    """Parse a HH:MM string into a time, raising ValueError on anything else."""
+    try:
+        hour, minute = (int(part) for part in value.strip().split(":"))
+        return clock_time(hour=hour, minute=minute)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"expected HH:MM, got {value!r}") from error
+
+
+def next_run_at(at_time, tz, now=None):
+    """The next datetime matching at_time in tz, today or tomorrow."""
+    now = now or datetime.now(tz)
+    target = datetime.combine(now.date(), at_time, tzinfo=tz)
+    if target.replace(tzinfo=None) <= now.replace(tzinfo=None):
+        target = datetime.combine(now.date() + timedelta(days=1), at_time, tzinfo=tz)
+
+    return target
+
+
+def sleep_until(target, tz):
+    """Sleep until the local clock reads target.
+
+    Everything here compares wall-clock time with the zone stripped, so the bot
+    posts at the same local time year round: across a DST change the real
+    interval is 23 or 25 hours, not 24. The clock is re-read on every pass so a
+    change of offset mid-sleep is picked up rather than slept through.
+    """
+    wanted = target.replace(tzinfo=None)
+    while True:
+        remaining = (wanted - datetime.now(tz).replace(tzinfo=None)).total_seconds()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 900))
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -436,10 +526,21 @@ def parse_args(argv=None):
         help="where to write the rendered image (default: images/output_image.jpg)",
     )
     parser.add_argument(
+        "--at",
+        default=os.environ.get("POST_AT", ""),
+        metavar="HH:MM",
+        help="keep running and post at this local time every day (see TZ)",
+    )
+    parser.add_argument(
         "--interval",
         type=int,
         default=int(os.environ.get("POST_INTERVAL_SECONDS", "0")),
-        help="if set, keep running and post every N seconds instead of exiting",
+        help="keep running and post every N seconds instead of exiting",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="post immediately and exit, ignoring --at and --interval",
     )
     return parser.parse_args(argv)
 
@@ -462,19 +563,36 @@ def main(argv=None):
             log.error("Missing required credentials: %s", ", ".join(missing))
             return 1
 
+    at_time = None
+    if args.at and not args.once:
+        try:
+            at_time = parse_post_at(args.at)
+        except ValueError as error:
+            log.error("Invalid --at/POST_AT: %s", error)
+            return 1
+
+    tz = local_timezone()
+    scheduled = bool(at_time) or (bool(args.interval) and not args.once)
+
     while True:
+        if at_time:
+            target = next_run_at(at_time, tz)
+            log.info("Next post at %s", target.strftime("%Y-%m-%d %H:%M %Z"))
+            sleep_until(target, tz)
+
         try:
             run_once(settings, dry_run=args.dry_run)
         except Exception:
             log.exception("Run failed")
-            if not args.interval:
+            if not scheduled:
                 return 1
 
-        if not args.interval:
+        if not scheduled:
             return 0
 
-        log.info("Sleeping %s seconds until the next post", args.interval)
-        time.sleep(args.interval)
+        if not at_time:
+            log.info("Sleeping %s seconds until the next post", args.interval)
+            time.sleep(args.interval)
 
 
 if __name__ == "__main__":

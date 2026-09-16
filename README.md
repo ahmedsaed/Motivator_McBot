@@ -6,8 +6,7 @@ A bot that posts motivational quotes rendered over a random photo from Unsplash.
 
 ## How it works
 
-1. Pulls a quote from [Quotable](https://github.com/lukePeavey/quotable), falling
-   back to a built-in list when the API is unreachable.
+1. Picks a quote from the bundled dataset in [`data/quotes.json`](data/quotes.json).
 2. Pulls a random landscape photo from Unsplash (or a solid colour if no key is set).
 3. Renders the quote over the photo with Pillow and posts it to X/Twitter.
 
@@ -24,7 +23,11 @@ The four X credentials are required; everything else is optional.
 | `IMAGE_QUERY` | no | Unsplash search terms (default `mountains lake nature`) |
 | `FONT_PATH` | no | Override the bold sans font used for rendering |
 | `OUTPUT_PATH` | no | Where the rendered image is written |
-| `POST_INTERVAL_SECONDS` | no | If set, keep running and post on this interval |
+| `QUOTES_FILE` | no | Path to the quote dataset (default `data/quotes.json`) |
+| `QUOTE_API_URL` | no | Fetch quotes from a remote API, using the dataset as fallback |
+| `TZ` | no | Timezone for `POST_AT` and log timestamps |
+| `POST_AT` | no | `HH:MM` local time to post daily; the container schedules itself |
+| `POST_INTERVAL_SECONDS` | no | Post every N seconds instead of at a set time — see [Scheduling](#scheduling) |
 
 An existing `config.py` from the original version is still read, so old checkouts
 keep working without changes.
@@ -38,6 +41,30 @@ keep working without changes.
    fails with a 403.
 4. Optionally register an app at [Unsplash](https://unsplash.com/developers) for
    the background photos.
+
+## Quotes
+
+Quotes come from a local dataset, so a normal run makes no quote-related network
+call at all. The bot previously used `api.quotable.io`, which is
+[defunct](https://github.com/lukePeavey/quotable/issues/271) — its data lives on
+at [quotable-io/data](https://github.com/quotable-io/data).
+
+[`data/quotes.json`](data/quotes.json) holds 181 quotes, the same selection the
+old API query asked for (`inspirational`, `success`, `motivational` and
+`leadership`, no longer than 220 characters). Regenerate or re-filter it with:
+
+```bash
+python scripts/fetch_quotes.py                             # the defaults above
+python scripts/fetch_quotes.py --tags wisdom,life          # 559 quotes
+python scripts/fetch_quotes.py --tags "" --max-length 280  # everything that fits
+```
+
+At one post a day, 181 quotes cycle in about six months. Widen `--tags` if you
+want a longer rotation — `--tags ""` keeps all 2127 quotes in the source dataset.
+
+If the dataset is missing or unreadable the bot falls back to a small built-in
+list, so it always has something to post. Setting `QUOTE_API_URL` makes it try
+that URL first and fall back to the dataset.
 
 ## Running locally
 
@@ -102,49 +129,34 @@ Scheduled workflows are best-effort — GitHub can delay them under load — and
 they are disabled automatically after 60 days of repository inactivity. Good
 enough for a quote bot, not for anything time-critical.
 
+Actions cron is UTC only and has no notion of daylight saving, so a fixed local
+time drifts by an hour twice a year. If that matters, schedule from a server
+instead — see [Scheduling](#scheduling).
+
 ### 2. Docker Compose on a server
 
 ```bash
 git clone https://github.com/ahmedsaed/Motivator_McBot.git
 cd Motivator_McBot
 cp .env.example .env && $EDITOR .env
-docker compose up -d
+docker compose run --rm motivator --once --dry-run   # check it works
+docker compose up -d                                 # start the scheduler
 docker compose logs -f
 ```
 
-`docker-compose.yml` sets `POST_INTERVAL_SECONDS` to 86400, so the container
-stays up and posts once a day, restarting automatically if the host reboots.
+The container schedules itself and posts daily at `POST_AT` — see
+[Scheduling](#scheduling).
 
-To post on a precise schedule instead, drop `POST_INTERVAL_SECONDS` and let cron
-run a one-shot container:
+### 3. Local checkout without Docker
 
-```cron
-0 9 * * * cd /srv/Motivator_McBot && docker compose run --rm motivator >> /var/log/motivator.log 2>&1
-```
-
-### 3. systemd timer with a local checkout
-
-For a server without Docker, use `run.sh` plus a timer:
-
-```ini
-# /etc/systemd/system/motivator.service
-[Service]
-Type=oneshot
-WorkingDirectory=/srv/Motivator_McBot
-ExecStart=/srv/Motivator_McBot/run.sh
-
-# /etc/systemd/system/motivator.timer
-[Timer]
-OnCalendar=*-*-* 09:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
+Use `./setup.sh` to create the venv, then run the bot with the same flags:
 
 ```bash
-sudo systemctl enable --now motivator.timer
+POST_AT=08:00 TZ=Africa/Cairo ./.venv/bin/python bot.py
 ```
+
+`run.sh` is a thin cron wrapper for the same thing if you would rather schedule
+it from the host.
 
 ### Verifying a deployment
 
@@ -156,6 +168,59 @@ sudo systemctl enable --now motivator.timer
   `docker compose cp motivator:/app/images/output_image.jpg .`
 - `Couldn't write ... falling back to /tmp` means the output directory is not
   writable by the container user; see the bind-mount note above.
+
+## Scheduling
+
+The container schedules itself. Set `POST_AT` to a `HH:MM` local time and `TZ`
+to your zone, and it posts once a day at that time, sleeping in between — no
+host cron, no systemd, no Docker socket. This is what `docker-compose.yml` does
+by default (08:00 `Africa/Cairo`).
+
+```yaml
+environment:
+  TZ: Africa/Cairo
+  POST_AT: "08:00"
+restart: unless-stopped
+```
+
+```bash
+docker compose up -d
+docker compose logs -f     # "Next post at 2026-09-17 08:00 EEST"
+```
+
+`restart: unless-stopped` brings the scheduler back after a reboot or a crash.
+On start it logs the next post time, so you can confirm the schedule without
+waiting for it.
+
+The time is a **local wall-clock** time: the bot posts at 08:00 whether or not
+daylight saving is in effect, so the real interval is 23 or 25 hours across a
+DST change rather than 24. Egypt switches between UTC+2 and UTC+3, which is
+exactly the case a fixed UTC schedule gets wrong.
+
+A missed post is skipped, not caught up — if the host is down at 08:00 the bot
+posts at 08:00 the next day.
+
+### One-off runs
+
+`--once` posts immediately and exits, ignoring `POST_AT`, which is what you want
+for a smoke test on a machine whose compose file sets a schedule:
+
+```bash
+docker compose run --rm motivator --once --dry-run   # renders, posts nothing
+docker compose run --rm motivator --once             # posts right now
+```
+
+### Other options
+
+`POST_INTERVAL_SECONDS` posts every N seconds instead of at a set time. It
+drifts relative to the clock, so prefer `POST_AT` unless you genuinely want a
+fixed interval.
+
+To drive the schedule from the host instead, leave `POST_AT` unset and run
+`docker compose run --rm motivator --once` from cron (`CRON_TZ=Africa/Cairo` at
+the top of the crontab) or a systemd timer
+(`OnCalendar=*-*-* 08:00:00 Africa/Cairo`; check your systemd accepts the
+timezone suffix with `systemd-analyze calendar` first).
 
 ## Notes on the X API
 
@@ -175,4 +240,6 @@ ample for one post a day.
 | `.github/workflows/build.yml` | Smoke test + multi-arch image build |
 | `.github/workflows/post.yml` | Scheduled posting |
 | `setup.sh` / `run.sh` | Local venv setup and cron wrapper |
+| `scripts/fetch_quotes.py` | Rebuilds `data/quotes.json` from the upstream dataset |
+| `data/quotes.json` | The bundled quote dataset |
 | `old-bot.js` / `bot-example.py` | Earlier versions, kept for reference |

@@ -1,0 +1,739 @@
+{
+  "source": "https://github.com/quotable-io/data",
+  "generated_at": "2026-09-16T14:06:18Z",
+  "filters": {
+    "tags": [
+      "inspirational",
+      "success",
+      "motivational",
+      "leadership"
+    ],
+    "max_length": 220
+  },
+  "quotes": [
+    {
+      "content": "A creative man is motivated by the desire to achieve, not by the desire to beat others.",
+      "author": "Ayn Rand"
+    },
+    {
+      "content": "A good plan violently executed now is better than a perfect plan executed next week.",
+      "author": "George S. Patton"
+    },
+    {
+      "content": "A leader is best when people barely know he exists, when his work is done, his aim fulfilled, they will say: we did it ourselves.",
+      "author": "Laozi"
+    },
+    {
+      "content": "A little more persistence, a little more effort, and what seemed hopeless failure may turn to glorious success.",
+      "author": "Elbert Hubbard"
+    },
+    {
+      "content": "A person who never made a mistake never tried anything new.",
+      "author": "Albert Einstein"
+    },
+    {
+      "content": "A successful person is one who can lay a firm foundation with the bricks that others throw at him or her.",
+      "author": "David Brinkley"
+    },
+    {
+      "content": "A wise person should be urgently moved on occasions that make for urgency.",
+      "author": "The Buddha"
+    },
+    {
+      "content": "Ability is what you're capable of doing. Motivation determines what you do. Attitude determines how well you do it.",
+      "author": "Lou Holtz"
+    },
+    {
+      "content": "Accept the challenges so that you can feel the exhilaration of victory.",
+      "author": "George S. Patton"
+    },
+    {
+      "content": "Action is the foundational key to all success.",
+      "author": "Pablo Picasso"
+    },
+    {
+      "content": "Aim for the moon. If you miss, you may hit a star.",
+      "author": "W. Clement Stone"
+    },
+    {
+      "content": "All our dreams can come true, if we have the courage to pursue them.",
+      "author": "Walt Disney"
+    },
+    {
+      "content": "All the great performers I have worked with are fueled by a personal dream.",
+      "author": "John Eliot"
+    },
+    {
+      "content": "Always be yourself, express yourself, have faith in yourself, do not go out and look for a successful personality and duplicate it.",
+      "author": "Bruce Lee"
+    },
+    {
+      "content": "Always bear in mind that your own resolution to succeed is more important than any one thing.",
+      "author": "Abraham Lincoln"
+    },
+    {
+      "content": "Always bear in mind that your own resolution to succeed is more important than any other.",
+      "author": "Abraham Lincoln"
+    },
+    {
+      "content": "Always do your best. What you plant now, you will harvest later.",
+      "author": "Og Mandino"
+    },
+    {
+      "content": "Ardently do today what must be done. Who knows? Tomorrow, death comes.",
+      "author": "The Buddha"
+    },
+    {
+      "content": "As you think, so shall you become.",
+      "author": "Bruce Lee"
+    },
+    {
+      "content": "Ask yourself the secret of your success. Listen to your answer and practice it.",
+      "author": "Richard Bach"
+    },
+    {
+      "content": "Be Impeccable with Your Word. Speak with integrity. Say only what you mean. Avoid using the word to speak against yourself or to gossip about others. Use the power of your word in the direction of truth and love.",
+      "author": "Don Miguel Ruiz"
+    },
+    {
+      "content": "Believe deep down in your heart that you're destined to do great things.",
+      "author": "Joe Paterno"
+    },
+    {
+      "content": "Believe in yourself! Have faith in your abilities! Without a humble but reasonable confidence in your own powers you cannot be successful or happy.",
+      "author": "Norman Vincent Peale"
+    },
+    {
+      "content": "By believing passionately in something that does not yet exist, we create it.",
+      "author": "Nikos Kazantzakis"
+    },
+    {
+      "content": "By failing to prepare, you are preparing to fail.",
+      "author": "Benjamin Franklin"
+    },
+    {
+      "content": "Change your life today. Don't gamble on the future, act now, without delay.",
+      "author": "Simone de Beauvoir"
+    },
+    {
+      "content": "Choose a job you love, and you will never have to work a day in your life.",
+      "author": "Confucius"
+    },
+    {
+      "content": "Coming together is a beginning; keeping together is progress; working together is success.",
+      "author": "Edward Everett Hale"
+    },
+    {
+      "content": "Difficulties are meant to rouse, not discourage. The human spirit is to grow strong by conflict.",
+      "author": "William Ellery Channing"
+    },
+    {
+      "content": "Difficulties increase the nearer we get to the goal.",
+      "author": "Johann Wolfgang von Goethe"
+    },
+    {
+      "content": "Do more than dream: work.",
+      "author": "William Arthur Ward"
+    },
+    {
+      "content": "Do not wait; the time will never be 'just right.' Start where you stand, and work with whatever tools you may have at your command, and better tools will be found as you go along.",
+      "author": "George Herbert"
+    },
+    {
+      "content": "Do something wonderful, people may imitate it.",
+      "author": "Albert Schweitzer"
+    },
+    {
+      "content": "Do the difficult things while they are easy and do the great things while they are small. A journey of a thousand miles must begin with a single step.",
+      "author": "Laozi"
+    },
+    {
+      "content": "Do the one thing you think you cannot do. Fail at it. Try again. Do better the second time. The only people who never tumble are those who never mount the high wire. This is your moment. Own it.",
+      "author": "Oprah Winfrey"
+    },
+    {
+      "content": "Don't wait. The time will never be just right.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "Don't watch the clock; do what it does. Keep going.",
+      "author": "Sam Levenson"
+    },
+    {
+      "content": "Effort only fully releases its reward after a person refuses to quit.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "Eighty percent of success is showing up.",
+      "author": "Woody Allen"
+    },
+    {
+      "content": "Every great dream begins with a dreamer. Always remember, you have within you the strength, the patience, and the passion to reach for the stars to change the world.",
+      "author": "Harriet Tubman"
+    },
+    {
+      "content": "Everything comes to him who hustles while he waits.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "Failure will never overtake me if my determination to succeed is strong enough.",
+      "author": "Og Mandino"
+    },
+    {
+      "content": "Focusing your life solely on making a buck shows a poverty of ambition. It asks too little of yourself. And it will leave you unfulfilled.",
+      "author": "Barack Obama"
+    },
+    {
+      "content": "Formula for success: under promise and over deliver.",
+      "author": "Tom Peters"
+    },
+    {
+      "content": "Genius is one per cent inspiration, ninety-nine per cent perspiration.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "Go for it now. The future is promised to no one.",
+      "author": "Wayne Dyer"
+    },
+    {
+      "content": "Good, better, best. Never let it rest. ‘Til your good is better and your better is best.",
+      "author": "Jerome"
+    },
+    {
+      "content": "Here is one quality that one must possess to win, and that is definiteness of purpose, the knowledge of what one wants, and a burning desire to possess it.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "I can't imagine a person becoming a success who doesn't give this game of life everything he's got.",
+      "author": "Walter Cronkite"
+    },
+    {
+      "content": "I can, therefore I am.",
+      "author": "Simone Weil"
+    },
+    {
+      "content": "I cannot give you the formula for success, but I can give you the formula for failure: which is: Try to please everybody.",
+      "author": "Herbert Bayard Swope"
+    },
+    {
+      "content": "I don't believe you have to be better than everybody else. I believe you have to be better than you ever thought you could be.",
+      "author": "Ken Venturi"
+    },
+    {
+      "content": "I know not age, nor weariness nor defeat.",
+      "author": "Rose Kennedy"
+    },
+    {
+      "content": "I know where I'm going and I know the truth, and I don't have to be what you want me to be. I'm free to be what I want.",
+      "author": "Muhammad Ali"
+    },
+    {
+      "content": "I never did anything worth doing by accident, nor did any of my inventions come by accident",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "I never see what has been done; I only see what remains to be done.",
+      "author": "Marie Curie"
+    },
+    {
+      "content": "I will prepare and some day my chance will come.",
+      "author": "Abraham Lincoln"
+    },
+    {
+      "content": "I will prepare and someday my chance will come.",
+      "author": "Abraham Lincoln"
+    },
+    {
+      "content": "I'd rather attempt to do something great and fail than to attempt to do nothing and succeed.",
+      "author": "Robert Schuller"
+    },
+    {
+      "content": "I'll prepare and someday my chance will come.",
+      "author": "Abraham Lincoln"
+    },
+    {
+      "content": "If A is success in life, then A equals x plus y plus z. Work is x; y is play; and z is keeping your mouth shut.",
+      "author": "Albert Einstein"
+    },
+    {
+      "content": "If I find 10,000 ways something won't work, I haven't failed. I am not discouraged, because every wrong attempt discarded is another step forward.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "If one advances confidently in the direction of his dream, and endeavors to live the life which he had imagines, he will meet with a success unexpected in common hours.",
+      "author": "Henry David Thoreau"
+    },
+    {
+      "content": "If we all did the things we are capable of doing, we would literally astound ourselves.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "If you aren't going all the way, why go at all?",
+      "author": "Joe Namath"
+    },
+    {
+      "content": "If you can dream it, you can do it.",
+      "author": "Walt Disney"
+    },
+    {
+      "content": "If you do not change direction, you may end up where you are heading.",
+      "author": "Laozi"
+    },
+    {
+      "content": "If you fell down yesterday, stand up today.",
+      "author": "H. G. Wells"
+    },
+    {
+      "content": "If you focus on results, you will never change. If you focus on change, you will get results.",
+      "author": "Jack Dixon"
+    },
+    {
+      "content": "If you want to succeed you should strike out on new paths, rather than travel the worn paths of accepted success.",
+      "author": "John Locke"
+    },
+    {
+      "content": "If you wish to be a writer, write.",
+      "author": "Epictetus"
+    },
+    {
+      "content": "If you're changing the world, you're working on important things. You're excited to get up in the morning.",
+      "author": "Larry Page"
+    },
+    {
+      "content": "If you're going through hell, keep going.",
+      "author": "Winston Churchill"
+    },
+    {
+      "content": "In order to succeed, we must first believe that we can.",
+      "author": "Nikos Kazantzakis"
+    },
+    {
+      "content": "In the depth of winter, I finally learned that there was within me an invincible summer.",
+      "author": "Albert Camus"
+    },
+    {
+      "content": "In the middle of every difficulty lies opportunity.",
+      "author": "Albert Einstein"
+    },
+    {
+      "content": "In times of change, learners inherit the earth, while the learned find themselves beautifully equipped to deal with a world that no longer exists.",
+      "author": "Eric Hoffer"
+    },
+    {
+      "content": "It always seems impossible until it's done.",
+      "author": "Nelson Mandela"
+    },
+    {
+      "content": "It does not matter how slowly you go as long as you do not stop.",
+      "author": "Confucius"
+    },
+    {
+      "content": "It is never too late to be what you might have been.",
+      "author": "George Eliot"
+    },
+    {
+      "content": "It is no use saying, 'We are doing our best.' You have got to succeed in doing what is necessary.",
+      "author": "Winston Churchill"
+    },
+    {
+      "content": "It is not the possession of truth, but the success which attends the seeking after it, that enriches the seeker and brings happiness to him.",
+      "author": "Max Planck"
+    },
+    {
+      "content": "It is on our failures that we base a new and different and better success.",
+      "author": "Havelock Ellis"
+    },
+    {
+      "content": "Keep your eyes on the stars and your feet on the ground.",
+      "author": "Theodore Roosevelt"
+    },
+    {
+      "content": "Knowing is not enough; we must apply!",
+      "author": "Johann Wolfgang von Goethe"
+    },
+    {
+      "content": "Knowing is not enough; we must apply. Willing is not enough; we must do.",
+      "author": "Johann Wolfgang von Goethe"
+    },
+    {
+      "content": "Leaders aren't born they are made. And they are made just like anything else, through hard work. And that's the price we'll have to pay to achieve that goal, or any goal.",
+      "author": "Vince Lombardi"
+    },
+    {
+      "content": "Learn from yesterday, live for today, hope for tomorrow.",
+      "author": "Albert Einstein"
+    },
+    {
+      "content": "Learning is the beginning of wealth. Learning is the beginning of health. Learning is the beginning of spirituality. Searching and learning is where the miracle process all begins.",
+      "author": "Jim Rohn"
+    },
+    {
+      "content": "Let us sacrifice our today so that our children can have a better tomorrow.",
+      "author": "A. P. J. Abdul Kalam"
+    },
+    {
+      "content": "Life is 10% what happens to you and 90% how you react to it.",
+      "author": "Chuck Swindoll"
+    },
+    {
+      "content": "Look up at the stars and not down at your feet. Try to make sense of what you see, and wonder about what makes the universe exist. Be curious.",
+      "author": "Stephen Hawking"
+    },
+    {
+      "content": "Many of life's failures are people who did not realize how close they were to success when they gave up.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "Meditate … do not delay, lest you later regret it.",
+      "author": "The Buddha"
+    },
+    {
+      "content": "Most great people have attained their greatest success just one step beyond their greatest failure.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "Motivation is the art of getting people to do what you want them to do because they want to do it.",
+      "author": "Dwight D. Eisenhower"
+    },
+    {
+      "content": "Mountains cannot be surmounted except by winding paths.",
+      "author": "Johann Wolfgang von Goethe"
+    },
+    {
+      "content": "Never complain and never explain.",
+      "author": "Benjamin Disraeli"
+    },
+    {
+      "content": "Never doubt that a small group of thoughtful, committed people can change the world. Indeed. It is the only thing that ever has.",
+      "author": "Margaret Mead"
+    },
+    {
+      "content": "Never give up, for that is just the place and time that the tide will turn.",
+      "author": "Harriet Beecher Stowe"
+    },
+    {
+      "content": "No bird soars too high if he soars with his own wings.",
+      "author": "William Blake"
+    },
+    {
+      "content": "No man can succeed in a line of endeavor which he does not like.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "Nobody will believe in you unless you believe in yourself.",
+      "author": "Liberace"
+    },
+    {
+      "content": "Not every difficult and dangerous thing is suitable for training, but only that which is conducive to success in achieving the object of our effort.",
+      "author": "Epictetus"
+    },
+    {
+      "content": "Nothing great was ever achieved without enthusiasm.",
+      "author": "Ralph Waldo Emerson"
+    },
+    {
+      "content": "Nothing will work unless you do.",
+      "author": "Maya Angelou"
+    },
+    {
+      "content": "Of course there is no formula for success except perhaps an unconditional acceptance of life and what it brings.",
+      "author": "Arthur Rubinstein"
+    },
+    {
+      "content": "Once we accept our limits, we go beyond them.",
+      "author": "Albert Einstein"
+    },
+    {
+      "content": "One fails forward toward success.",
+      "author": "Charles F. Kettering"
+    },
+    {
+      "content": "One secret of success in life is for a man to be ready for his opportunity when it comes.",
+      "author": "Benjamin Disraeli"
+    },
+    {
+      "content": "One who gains strength by overcoming obstacles possesses the only strength which can overcome adversity.",
+      "author": "Albert Schweitzer"
+    },
+    {
+      "content": "Only I can change my life. No one can do it for me.",
+      "author": "Carol Burnett"
+    },
+    {
+      "content": "Opportunity does not knock, it presents itself when you beat down the door.",
+      "author": "Kyle Chandler"
+    },
+    {
+      "content": "Optimism is the faith that leads to achievement. Nothing can be done without hope and confidence.",
+      "author": "Helen Keller"
+    },
+    {
+      "content": "Our greatest weakness lies in giving up. The most certain way to succeed is always to try just one more time.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "Perseverance is a great element of success. If you only knock long enough and loud enough at the gate, you are sure to wake up somebody.",
+      "author": "Henry Wadsworth Longfellow"
+    },
+    {
+      "content": "Problems are not stop signs, they are guidelines.",
+      "author": "Robert Schuller"
+    },
+    {
+      "content": "Quality is not an act; it is a habit.",
+      "author": "Aristotle"
+    },
+    {
+      "content": "Real success is finding your lifework in the work that you love.",
+      "author": "David McCullough"
+    },
+    {
+      "content": "Results! Why, man, I have gotten a lot of results. I know several thousand things that won't work.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "Self-trust is the first secret of success.",
+      "author": "Ralph Waldo Emerson"
+    },
+    {
+      "content": "Set your goals high, and don't stop till you get there.",
+      "author": "Bo Jackson"
+    },
+    {
+      "content": "Setting goals is the first step in turning the invisible into the visible.",
+      "author": "Tony Robbins"
+    },
+    {
+      "content": "Should someone do good, let them do it again and again. They should develop this habit, for the accumulation of goodness brings joy.",
+      "author": "The Buddha"
+    },
+    {
+      "content": "Six essential qualities that are the key to success: Sincerity, personal integrity, humility, courtesy, wisdom, charity.",
+      "author": "William C. Menninger"
+    },
+    {
+      "content": "Some people thrive on huge, dramatic change. Some people prefer the slow and steady route. Do what's right for you.",
+      "author": "Julie Morgenstern"
+    },
+    {
+      "content": "Start where you are. Use what you have. Do what you can.",
+      "author": "Arthur Ashe"
+    },
+    {
+      "content": "Success consists of going from failure to failure without loss of enthusiasm.",
+      "author": "Winston Churchill"
+    },
+    {
+      "content": "Success in business requires training and discipline and hard work. But if you're not frightened by these things, the opportunities are just as great today as they ever were.",
+      "author": "David Rockefeller"
+    },
+    {
+      "content": "Success is not final; failure is not fatal: it is the courage to continue that counts.",
+      "author": "Winston Churchill"
+    },
+    {
+      "content": "Success is not the key to happiness. Happiness is the key to success. If you love what you are doing, you will be successful.",
+      "author": "Albert Schweitzer"
+    },
+    {
+      "content": "Successful people ask better questions, and as a result, they get better answers.",
+      "author": "Tony Robbins"
+    },
+    {
+      "content": "That's the risk you take if you change: that people you've been involved with won't like the new you. But other people who do will come along.",
+      "author": "Lisa Alther"
+    },
+    {
+      "content": "The art of progress is to preserve order amid change, and to preserve change amid order.",
+      "author": "Alfred North Whitehead"
+    },
+    {
+      "content": "The best way to predict your future is to create it.",
+      "author": "Peter Drucker"
+    },
+    {
+      "content": "The biggest room in the world is room for improvement.",
+      "author": "Helmut Schmidt"
+    },
+    {
+      "content": "The dream was always running ahead of me. To catch up, to live for a moment in unison with it, that was the miracle.",
+      "author": "Anaïs Nin"
+    },
+    {
+      "content": "The first requisite for success is the ability to apply your physical and mental energies to one problem incessantly without growing weary.",
+      "author": "Thomas Edison"
+    },
+    {
+      "content": "The industrial landscape is already littered with remains of once successful companies that could not adapt their strategic vision to altered conditions of competition.",
+      "author": "Ralph Abernathy"
+    },
+    {
+      "content": "The key is to keep company only with people who uplift you, whose presence calls forth your best.",
+      "author": "Epictetus"
+    },
+    {
+      "content": "The ladder of success is never crowded at the top.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "The more man meditates upon good thoughts, the better will be his world and the world at large.",
+      "author": "Confucius"
+    },
+    {
+      "content": "The most effective way to do it, is to do it.",
+      "author": "Amelia Earhart"
+    },
+    {
+      "content": "The most successful people are those who are good at plan B.",
+      "author": "James A. Yorke"
+    },
+    {
+      "content": "The one thing that you have that nobody else has is you. Your voice, your mind, your story, your vision. So write and draw and build and play and dance and live as only you can.",
+      "author": "Neil Gaiman"
+    },
+    {
+      "content": "The path to success is to take massive, determined action.",
+      "author": "Tony Robbins"
+    },
+    {
+      "content": "The person who lives life fully, glowing with life's energy, is the person who lives a successful life.",
+      "author": "Daisaku Ikeda"
+    },
+    {
+      "content": "The person who makes a success of living is the one who see his goal steadily and aims for it unswervingly. That is dedication.",
+      "author": "Cecil B. DeMille"
+    },
+    {
+      "content": "The secret of getting ahead is getting started.",
+      "author": "Mark Twain"
+    },
+    {
+      "content": "The secret of success is constancy to purpose.",
+      "author": "Benjamin Disraeli"
+    },
+    {
+      "content": "The will to win, the desire to succeed, the urge to reach your full potential... these are the keys that will unlock the door to personal excellence.",
+      "author": "Confucius"
+    },
+    {
+      "content": "There are no secrets to success. It is the result of preparation, hard work, and learning from failure.",
+      "author": "Colin Powell"
+    },
+    {
+      "content": "There is no passion to be found playing small - in settling for a life that is less than the one you are capable of living.",
+      "author": "Nelson Mandela"
+    },
+    {
+      "content": "There is nothing impossible to him who will try.",
+      "author": "Alexander the Great"
+    },
+    {
+      "content": "There is only one corner of the universe you can be certain of improving, and that's your own self.",
+      "author": "Aldous Huxley"
+    },
+    {
+      "content": "There is only one success - to be able to spend your life in your own way.",
+      "author": "Christopher Morley"
+    },
+    {
+      "content": "There is only one success: to be able to spend your life in your own way.",
+      "author": "Christopher Morley"
+    },
+    {
+      "content": "There's power in looking silly and not caring that you do.",
+      "author": "Amy Poehler"
+    },
+    {
+      "content": "Things do not happen. Things are made to happen.",
+      "author": "John F. Kennedy"
+    },
+    {
+      "content": "Those who are blessed with the most talent don't necessarily outperform everyone else. It's the people with follow-through who excel.",
+      "author": "Mary Kay Ash"
+    },
+    {
+      "content": "Through perseverance many people win success out of what seemed destined to be certain failure.",
+      "author": "Benjamin Disraeli"
+    },
+    {
+      "content": "To accomplish great things, we must not only act, but also dream; not only plan, but also believe.",
+      "author": "Anatole France"
+    },
+    {
+      "content": "To follow, without halt, one aim: There is the secret of success.",
+      "author": "Anna Pavlova"
+    },
+    {
+      "content": "To improve is to change; to be perfect is to change often.",
+      "author": "Winston Churchill"
+    },
+    {
+      "content": "Until you value yourself, you won't value your time. Until you value your time, you won't do anything with it.",
+      "author": "M. Scott Peck"
+    },
+    {
+      "content": "Using the power of decision gives you the capacity to get past any excuse to change any and every part of your life in an instant.",
+      "author": "Tony Robbins"
+    },
+    {
+      "content": "We should not give up and we should not allow the problem to defeat us.",
+      "author": "A. P. J. Abdul Kalam"
+    },
+    {
+      "content": "Well done is better than well said.",
+      "author": "Benjamin Franklin"
+    },
+    {
+      "content": "What you do today can improve all your tomorrows.",
+      "author": "Ralph Marston"
+    },
+    {
+      "content": "What you get by achieving your goals is not as important as what you become by achieving your goals.",
+      "author": "Zig Ziglar"
+    },
+    {
+      "content": "When something is important enough, you do it even if the odds are not in your favor.",
+      "author": "Elon Musk"
+    },
+    {
+      "content": "When you reach the end of your rope, tie a knot in it and hang on.",
+      "author": "Franklin D. Roosevelt"
+    },
+    {
+      "content": "Whether you think you can or you think you can't, you are right.",
+      "author": "Henry Ford"
+    },
+    {
+      "content": "With the new day comes new strength and new thoughts.",
+      "author": "Eleanor Roosevelt"
+    },
+    {
+      "content": "Without hard work, nothing grows but weeds.",
+      "author": "Gordon Hinckley"
+    },
+    {
+      "content": "You can't cross the sea merely by standing and staring at the water.",
+      "author": "Rabindranath Tagore"
+    },
+    {
+      "content": "You just can't beat the person who never gives up.",
+      "author": "Babe Ruth"
+    },
+    {
+      "content": "You might well remember that nothing can bring you success but yourself.",
+      "author": "Napoleon Hill"
+    },
+    {
+      "content": "You were not born a winner, and you were not born a loser. You are what you make yourself be.",
+      "author": "Lou Holtz"
+    },
+    {
+      "content": "You yourself must strive. The Buddhas only point the way.",
+      "author": "The Buddha"
+    },
+    {
+      "content": "Your talent is God's gift to you. What you do with it is your gift back to God.",
+      "author": "Leo Buscaglia"
+    }
+  ]
+}
