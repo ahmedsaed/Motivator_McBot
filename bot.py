@@ -32,6 +32,7 @@ MAX_LENGTH = 280
 # targets it, so media is uploaded here against v2 rather than through tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
 USERS_ME_URL = "https://api.x.com/2/users/me"
+TWEETS_URL = "https://api.x.com/2/tweets"
 # X's media endpoint returns 503 "over capacity" intermittently, so retry
 # before giving up. Status codes worth another attempt:
 MEDIA_UPLOAD_ATTEMPTS = 4
@@ -613,19 +614,45 @@ def run_check(settings):
         log.error("  -> request failed: %s", error)
         upload_ok = False
 
+    # Probe write entitlement without posting: an empty body is rejected by
+    # validation (400) when the account may write, and by the access layer
+    # (403/503) when it may not. Nothing is ever published.
+    log.info("POST %s (deliberately invalid body, nothing is posted)", TWEETS_URL)
+    write_status = None
+    try:
+        response = oauth.post(TWEETS_URL, json={}, timeout=30)
+        write_status = response.status_code
+        log.info("  -> %s %s", response.status_code, response.text[:200])
+    except requests.RequestException as error:
+        log.error("  -> request failed: %s", error)
+
     log.info("-" * 60)
+    if write_status == 400:
+        log.info(
+            "Posting text is entitled (the empty body was rejected by "
+            "validation, not by access control)."
+        )
+    elif write_status is not None:
+        log.info(
+            "Posting text is not entitled either: %s rather than the 400 a "
+            "permitted account gets for an invalid body.",
+            write_status,
+        )
+
     if identity_ok and upload_ok:
         log.info("Both calls succeeded; media upload is working.")
     elif reason == "client-not-enrolled":
         log.info(
-            "The X API v2 does not consider these keys to belong to an App in "
-            "a Project. Either that App is not in one, or the keys came from a "
-            "different App than the one your Project holds -- compare the App "
-            "id above with the App inside the Project in the developer portal. "
-            "The consumer key is what identifies the App, so all four values "
-            "have to come from the same App. Nothing in this repository can "
-            "work around it. The media endpoint's 503 is the same problem "
-            "reported with a less helpful status code."
+            "X rejected these keys for v2 user-context endpoints "
+            "(reason: client-not-enrolled). If the App id above matches the "
+            "App inside your Project, the App itself is fine and the block is "
+            "the account's access level: X moved to pay-per-usage credits in "
+            "February 2026, and a legacy Free project does not entitle these "
+            "endpoints. Buy credits in the developer console at "
+            "https://console.x.com, or move the App to a paid plan. If the App "
+            "id does not match your Project, the keys are from a different App "
+            "instead -- all four values must come from one App. Either way, "
+            "nothing in this repository can work around it."
         )
     elif identity_ok:
         log.info(

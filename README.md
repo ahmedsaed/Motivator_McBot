@@ -243,14 +243,17 @@ docker compose run --rm motivator --check
 It calls `GET /2/users/me` and then attempts a media upload, printing the status
 and body of each.
 
-The most common cause is a 403 with `"reason": "client-not-enrolled"`. The X
-API v2 only accepts keys from an App that sits inside a Project, and the error
-carries a `client_id` naming the App the keys actually belong to. Compare it
-with the App in your Project: if they differ, the credentials are from an older
-standalone App rather than the one you attached. The consumer key is what
-identifies the App, so `API_KEY`, `API_SECRET`, `ACCESS_TOKEN` and
-`ACCESS_TOKEN_SECRET` must all come from the same App. The media endpoint
-reports this as a bare 503, which is why the failure looks like an outage.
+`--check` makes three calls and posts nothing. The third deliberately sends an
+invalid body to `POST /2/tweets`: a 400 means the account may write and the body
+was merely rejected by validation, while a 403 or 503 means it may not.
+
+A 403 with `"reason": "client-not-enrolled"` has two causes. The error names a
+`client_id`; if it does not match the App in your Project, the keys are from a
+different App — all four values must come from one App. If it does match, the
+App is fine and the block is the account's access level. X moved to
+pay-per-usage credits in February 2026 and a legacy Free project does not
+entitle these endpoints, which the media endpoint reports as a bare 503 rather
+than a useful error.
 
 A 200 on `users/me` with a failing upload would instead point at the media
 endpoint itself. A 401 means the keys are wrong.
