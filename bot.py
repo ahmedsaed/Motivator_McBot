@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from functools import partial
 from datetime import datetime, time as clock_time, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -32,6 +33,8 @@ MAX_LENGTH = 280
 # targets it, so media is uploaded here against v2 rather than through tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
 USERS_ME_URL = "https://api.x.com/2/users/me"
+TWEETS_URL = "https://api.x.com/2/tweets"
+TOKEN_URL = "https://api.x.com/2/oauth2/token"
 # X's media endpoint returns 503 "over capacity" intermittently, so retry
 # before giving up. Status codes worth another attempt:
 MEDIA_UPLOAD_ATTEMPTS = 4
@@ -68,6 +71,10 @@ class Settings:
     image_query: str = "mountains lake nature"
     font_path: str = ""
     output_path: Path = Path("images/output_image.jpg")
+    client_id: str = ""
+    client_secret: str = ""
+    refresh_token: str = ""
+    token_store: Path = Path("state/token.json")
     quotes_file: Path = QUOTES_FILE
     quote_api_url: str = ""
 
@@ -93,11 +100,30 @@ class Settings:
             image_query=value("IMAGE_QUERY", default="mountains lake nature"),
             font_path=value("FONT_PATH"),
             output_path=Path(value("OUTPUT_PATH", default="images/output_image.jpg")),
+            client_id=value("CLIENT_ID"),
+            client_secret=value("CLIENT_SECRET"),
+            refresh_token=value("REFRESH_TOKEN"),
+            token_store=Path(value("TOKEN_STORE", default="state/token.json")),
             quotes_file=Path(value("QUOTES_FILE", default=str(QUOTES_FILE))),
             quote_api_url=value("QUOTE_API_URL"),
         )
 
+    def uses_oauth2(self):
+        """OAuth 2.0 is used when a client and some refresh token are present."""
+        return bool(
+            self.client_id
+            and self.client_secret
+            and (self.refresh_token or self.token_store.exists())
+        )
+
     def missing_credentials(self):
+        if self.uses_oauth2():
+            required = {
+                "CLIENT_ID": self.client_id,
+                "CLIENT_SECRET": self.client_secret,
+            }
+            return sorted(n for n, v in required.items() if not v)
+
         required = {
             "API_KEY": self.api_key,
             "API_SECRET": self.api_secret,
@@ -387,15 +413,107 @@ def save_canvas(canvas, output_path):
     return fallback
 
 
+class AuthError(Exception):
+    """Raised when an access token could not be obtained."""
+
+
+def load_refresh_token(settings):
+    """The stored token wins: X can hand back a new one on every refresh."""
+    try:
+        with open(settings.token_store, encoding="utf-8") as handle:
+            stored = json.load(handle).get("refresh_token")
+    except (OSError, ValueError):
+        return settings.refresh_token
+
+    return stored or settings.refresh_token
+
+
+def save_refresh_token(settings, token):
+    """Persist a rotated refresh token; warn loudly if that is not possible."""
+    try:
+        settings.token_store.parent.mkdir(parents=True, exist_ok=True)
+        with open(settings.token_store, "w", encoding="utf-8") as handle:
+            json.dump({"refresh_token": token}, handle)
+        os.chmod(settings.token_store, 0o600)
+        log.info("Stored the rotated refresh token in %s", settings.token_store)
+    except OSError as error:
+        log.warning(
+            "Couldn't write %s (%s). X issued a new refresh token and the old "
+            "one may stop working, so the next run could fail until "
+            "REFRESH_TOKEN is updated by hand.",
+            settings.token_store,
+            error,
+        )
+
+
+def fetch_access_token(settings):
+    """Trade the refresh token for an access token.
+
+    OAuth 2.0 access tokens last two hours, so a daily bot cannot hold one in
+    an environment variable; it refreshes on every run instead.
+    """
+    refresh_token = load_refresh_token(settings)
+    if not refresh_token:
+        raise AuthError(
+            "no refresh token available -- run scripts/authorize.py to get one"
+        )
+
+    try:
+        response = requests.post(
+            TOKEN_URL,
+            auth=(settings.client_id, settings.client_secret),
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            timeout=HTTP_TIMEOUT,
+        )
+    except requests.RequestException as error:
+        raise AuthError(f"token refresh request failed: {error}") from error
+
+    if not response.ok:
+        raise AuthError(
+            f"token refresh failed ({response.status_code}): {response.text[:300]}"
+        )
+
+    payload = response.json()
+    rotated = payload.get("refresh_token")
+    if rotated and rotated != refresh_token:
+        save_refresh_token(settings, rotated)
+
+    access_token = payload.get("access_token")
+    if not access_token:
+        raise AuthError("the token response contained no access_token")
+
+    log.info("Obtained an access token (expires in %ss)", payload.get("expires_in"))
+    return access_token
+
+
+def make_poster(settings):
+    """Return a callable that POSTs with whichever auth is configured."""
+    if settings.uses_oauth2():
+        access_token = fetch_access_token(settings)
+        headers = {"Authorization": f"Bearer {access_token}"}
+        poster = partial(requests.post, headers=headers)
+        poster.access_token = access_token
+        return poster
+
+    oauth = OAuth1Session(
+        client_key=settings.api_key,
+        client_secret=settings.api_secret,
+        resource_owner_key=settings.access_token,
+        resource_owner_secret=settings.access_token_secret,
+    )
+    poster = oauth.post
+    return poster
+
+
 class MediaUploadError(Exception):
     """Raised when the image could not be uploaded to X."""
 
 
-def upload_media_v2(oauth, image_path):
+def upload_media_v2(poster, image_path):
     """One POST to the v2 media endpoint. Returns (media_id, should_retry)."""
     try:
         with open(image_path, "rb") as handle:
-            response = oauth.post(
+            response = poster(
                 MEDIA_UPLOAD_URL,
                 files={"media": (image_path.name, handle, "image/jpeg")},
                 data={"media_category": "tweet_image"},
@@ -424,17 +542,10 @@ def upload_media_v2(oauth, image_path):
     return None, response.status_code in RETRYABLE_STATUS
 
 
-def upload_media(settings, image_path):
-    """Upload the image to X, retrying the v2 endpoint before trying v1.1."""
-    oauth = OAuth1Session(
-        client_key=settings.api_key,
-        client_secret=settings.api_secret,
-        resource_owner_key=settings.access_token,
-        resource_owner_secret=settings.access_token_secret,
-    )
-
+def upload_media(poster, image_path):
+    """Upload the image to X, retrying while the endpoint says to."""
     for attempt in range(1, MEDIA_UPLOAD_ATTEMPTS + 1):
-        media_id, should_retry = upload_media_v2(oauth, image_path)
+        media_id, should_retry = upload_media_v2(poster, image_path)
         if media_id:
             log.info("Uploaded media via v2 endpoint (id=%s)", media_id)
             return media_id
@@ -459,14 +570,23 @@ def upload_media(settings, image_path):
 def post_tweet(settings, body, image_path):
     log.info("Tweeting:\n%s", body)
 
+    poster = make_poster(settings)
+    media_id = upload_media(poster, image_path)
+
+    if settings.uses_oauth2():
+        # user_auth=False makes tweepy send the token as a bearer header,
+        # which is what OAuth 2.0 user context needs.
+        client = tweepy.Client(bearer_token=poster.access_token)
+        return client.create_tweet(
+            text=body, media_ids=[media_id], user_auth=False
+        )
+
     client = tweepy.Client(
         consumer_key=settings.api_key,
         consumer_secret=settings.api_secret,
         access_token=settings.access_token,
         access_token_secret=settings.access_token_secret,
     )
-
-    media_id = upload_media(settings, image_path)
     return client.create_tweet(text=body, media_ids=[media_id])
 
 
@@ -561,18 +681,47 @@ def run_check(settings):
         log.error("Missing required credentials: %s", ", ".join(missing))
         return 1
 
-    oauth = OAuth1Session(
-        client_key=settings.api_key,
-        client_secret=settings.api_secret,
-        resource_owner_key=settings.access_token,
-        resource_owner_secret=settings.access_token_secret,
+    log.info(
+        "Authenticating with %s",
+        "OAuth 2.0 (client + refresh token)"
+        if settings.uses_oauth2()
+        else "OAuth 1.0a (consumer key + access token)",
     )
+    try:
+        poster = make_poster(settings)
+    except AuthError as error:
+        log.error("Could not authenticate: %s", error)
+        return 1
+
+    if settings.uses_oauth2():
+        headers = {"Authorization": f"Bearer {poster.access_token}"}
+        getter = partial(requests.get, headers=headers)
+    else:
+        getter = OAuth1Session(
+            client_key=settings.api_key,
+            client_secret=settings.api_secret,
+            resource_owner_key=settings.access_token,
+            resource_owner_secret=settings.access_token_secret,
+        ).get
 
     log.info("GET %s", USERS_ME_URL)
+    reason = ""
     try:
-        response = oauth.get(USERS_ME_URL, timeout=30)
+        response = getter(USERS_ME_URL, timeout=30)
         log.info("  -> %s %s", response.status_code, response.text[:300])
         identity_ok = response.ok
+        try:
+            payload = response.json()
+            reason = payload.get("reason", "")
+            client_id = payload.get("client_id")
+            if client_id:
+                log.info(
+                    "  -> X says these keys belong to App %s; check that this "
+                    "matches the App inside your Project in the developer portal",
+                    client_id,
+                )
+        except ValueError:
+            pass
     except requests.RequestException as error:
         log.error("  -> request failed: %s", error)
         identity_ok = False
@@ -588,7 +737,7 @@ def run_check(settings):
     log.info("POST %s", MEDIA_UPLOAD_URL)
     try:
         with open(image_path, "rb") as handle:
-            response = oauth.post(
+            response = poster(
                 MEDIA_UPLOAD_URL,
                 files={"media": (image_path.name, handle, "image/jpeg")},
                 data={"media_category": "tweet_image"},
@@ -600,21 +749,56 @@ def run_check(settings):
         log.error("  -> request failed: %s", error)
         upload_ok = False
 
+    # Probe write entitlement without posting: an empty body is rejected by
+    # validation (400) when the account may write, and by the access layer
+    # (403/503) when it may not. Nothing is ever published.
+    log.info("POST %s (deliberately invalid body, nothing is posted)", TWEETS_URL)
+    write_status = None
+    try:
+        response = poster(TWEETS_URL, json={}, timeout=30)
+        write_status = response.status_code
+        log.info("  -> %s %s", response.status_code, response.text[:200])
+    except requests.RequestException as error:
+        log.error("  -> request failed: %s", error)
+
     log.info("-" * 60)
+    if write_status == 400:
+        log.info(
+            "Posting text is entitled (the empty body was rejected by "
+            "validation, not by access control)."
+        )
+    elif write_status is not None:
+        log.info(
+            "Posting text is not entitled either: %s rather than the 400 a "
+            "permitted account gets for an invalid body.",
+            write_status,
+        )
+
     if identity_ok and upload_ok:
         log.info("Both calls succeeded; media upload is working.")
+    elif reason == "client-not-enrolled":
+        log.info(
+            "X rejected these keys for v2 user-context endpoints "
+            "(reason: client-not-enrolled). If the App id above matches the "
+            "App inside your Project, the App itself is fine and the block is "
+            "the account's access level: X moved to pay-per-usage credits in "
+            "February 2026, and a legacy Free project does not entitle these "
+            "endpoints. Buy credits in the developer console at "
+            "https://console.x.com, or move the App to a paid plan. If the App "
+            "id does not match your Project, the keys are from a different App "
+            "instead -- all four values must come from one App. Either way, "
+            "nothing in this repository can work around it."
+        )
     elif identity_ok:
         log.info(
-            "Credentials work and the v2 API answers, but media upload does not. "
-            "The problem is specific to the media endpoint."
+            "Credentials work and the v2 API answers, but media upload does "
+            "not. The problem is specific to the media endpoint."
         )
     else:
         log.info(
             "users/me did not succeed either, so this is not media-specific. "
-            "Check the app's access level and billing in the developer portal: "
-            "a 401 means bad keys, a 403 means the app lacks the access, and a "
-            "503 on every v2 endpoint usually means the project is not on a "
-            "working plan."
+            "Check the App's access level in the developer portal: 401 means "
+            "the keys are wrong, 403 means the App lacks the required access."
         )
 
     return 0 if (identity_ok and upload_ok) else 1
