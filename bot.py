@@ -745,9 +745,11 @@ def run_check(settings):
             )
         log.info("  -> %s %s", response.status_code, response.text[:300])
         upload_ok = response.ok
+        upload_status = response.status_code
     except requests.RequestException as error:
         log.error("  -> request failed: %s", error)
         upload_ok = False
+        upload_status = None
 
     # Probe write entitlement without posting: an empty body is rejected by
     # validation (400) when the account may write, and by the access layer
@@ -764,15 +766,35 @@ def run_check(settings):
     log.info("-" * 60)
     if write_status == 400:
         log.info(
-            "Posting text is entitled (the empty body was rejected by "
-            "validation, not by access control)."
+            "Posting text works (the empty body was rejected by validation, "
+            "not by access control)."
+        )
+    elif write_status == 402:
+        log.info(
+            "Posting is blocked by billing, not by configuration: X answered "
+            "402 credits depleted. There is no free allowance covering it. "
+            "Buy credits at https://console.x.com; a post costs $0.015, so "
+            "one a day is about $0.46 a month. Note that a post containing a "
+            "URL costs $0.200 instead."
         )
     elif write_status is not None:
         log.info(
-            "Posting text is not entitled either: %s rather than the 400 a "
-            "permitted account gets for an invalid body.",
+            "Posting text did not work: %s rather than the 400 a permitted "
+            "account gets for an invalid body.",
             write_status,
         )
+
+    if identity_ok and upload_status == 403:
+        log.info(
+            "Media upload returned 403 while users/me returned 200, so the "
+            "credentials are fine and something narrower is refusing the "
+            "upload. The usual cause is a refresh token minted without the "
+            "media.write scope -- re-run scripts/authorize.py, which asks for "
+            "it, and replace REFRESH_TOKEN. If credits are also depleted, "
+            "clear that first and re-check, since entitlement errors can mask "
+            "each other."
+        )
+        return 1
 
     if identity_ok and upload_ok:
         log.info("Both calls succeeded; media upload is working.")

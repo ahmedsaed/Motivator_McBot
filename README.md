@@ -275,7 +275,16 @@ and body of each.
 
 `--check` makes three calls and posts nothing. The third deliberately sends an
 invalid body to `POST /2/tweets`: a 400 means the account may write and the body
-was merely rejected by validation, while a 403 or 503 means it may not.
+was merely rejected by validation, while anything else means it may not.
+
+- **402 `credits depleted`** — billing, not configuration. There is no free
+  allowance; buy credits at [console.x.com](https://console.x.com).
+- **403 on the upload while `users/me` returns 200** — the credentials are fine
+  and something narrower refuses the upload. Usually a refresh token minted
+  without the `media.write` scope; re-run `scripts/authorize.py`.
+
+Entitlement errors can mask one another, so clear the billing one first and
+re-check.
 
 A 403 with `"reason": "client-not-enrolled"` has two causes. The error names a
 `client_id`; if it does not match the App in your Project, the keys are from a
