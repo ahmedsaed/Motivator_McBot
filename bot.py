@@ -8,6 +8,7 @@ import argparse
 import logging
 import os
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from io import BytesIO
@@ -309,11 +310,33 @@ def setup_image(quote, background_image_url, output_path, font_path=""):
         stroke_fill=STROKE_COLOR,
     )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(output_path, quality=90)
-    log.info("Image written to %s", output_path)
+    return save_canvas(canvas, output_path)
 
-    return output_path
+
+def save_canvas(canvas, output_path):
+    """Save the canvas, falling back to a temp file if the target is unwritable.
+
+    A bind-mounted directory is commonly owned by root while the container runs
+    as an unprivileged user, and failing to keep a local copy is not a good
+    enough reason to skip the post.
+    """
+    fallback = Path(tempfile.gettempdir()) / "motivator_output.jpg"
+
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        canvas.save(output_path, quality=90)
+        log.info("Image written to %s", output_path)
+        return output_path
+    except OSError as error:
+        if output_path.resolve() == fallback.resolve():
+            raise
+        log.warning(
+            "Couldn't write %s (%s); falling back to %s", output_path, error, fallback
+        )
+
+    canvas.save(fallback, quality=90)
+    log.info("Image written to %s", fallback)
+    return fallback
 
 
 def upload_media(settings, image_path):
