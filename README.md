@@ -241,11 +241,17 @@ docker compose run --rm motivator --check
 ```
 
 It calls `GET /2/users/me` and then attempts a media upload, printing the status
-and body of each. A 503 on both is not media-specific: X replaced its tiered
-plans with pay-per-use in February 2026, and persistent 503s across v2 endpoints
-have been reported by accounts whose plan or billing is not in a working state.
-A 200 on `users/me` with a 503 on the upload narrows the problem to the media
-endpoint. A 401 means the keys are wrong; a 403 means the app lacks the access.
+and body of each.
+
+The most common cause is a 403 with `"reason": "client-not-enrolled"`, which
+means the App those keys belong to is not attached to a Project. The X API v2
+requires that, and Apps created before Projects existed are not attached to one
+by default. The media endpoint reports the same problem as a bare 503, which is
+why the failure looks like an outage. Fix it in the developer portal by
+attaching the App to a Project, then regenerate the access token and secret.
+
+A 200 on `users/me` with a failing upload would instead point at the media
+endpoint itself. A 401 means the keys are wrong.
 
 ## Repository layout
 

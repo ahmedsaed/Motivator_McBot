@@ -569,10 +569,15 @@ def run_check(settings):
     )
 
     log.info("GET %s", USERS_ME_URL)
+    reason = ""
     try:
         response = oauth.get(USERS_ME_URL, timeout=30)
         log.info("  -> %s %s", response.status_code, response.text[:300])
         identity_ok = response.ok
+        try:
+            reason = response.json().get("reason", "")
+        except ValueError:
+            pass
     except requests.RequestException as error:
         log.error("  -> request failed: %s", error)
         identity_ok = False
@@ -603,18 +608,25 @@ def run_check(settings):
     log.info("-" * 60)
     if identity_ok and upload_ok:
         log.info("Both calls succeeded; media upload is working.")
+    elif reason == "client-not-enrolled":
+        log.info(
+            "The App these keys belong to is not attached to a Project, so the "
+            "X API v2 rejects it. Nothing in this repository can work around "
+            "that. In the developer portal, attach the App to a Project (or "
+            "create the App inside one), then regenerate the access token and "
+            "secret and put the new values in .env. The media endpoint's 503 "
+            "is the same problem reported with a less helpful status code."
+        )
     elif identity_ok:
         log.info(
-            "Credentials work and the v2 API answers, but media upload does not. "
-            "The problem is specific to the media endpoint."
+            "Credentials work and the v2 API answers, but media upload does "
+            "not. The problem is specific to the media endpoint."
         )
     else:
         log.info(
             "users/me did not succeed either, so this is not media-specific. "
-            "Check the app's access level and billing in the developer portal: "
-            "a 401 means bad keys, a 403 means the app lacks the access, and a "
-            "503 on every v2 endpoint usually means the project is not on a "
-            "working plan."
+            "Check the App's access level in the developer portal: 401 means "
+            "the keys are wrong, 403 means the App lacks the required access."
         )
 
     return 0 if (identity_ok and upload_ok) else 1
