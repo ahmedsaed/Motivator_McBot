@@ -33,6 +33,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY bot.py ./
+COPY data ./data
 RUN mkdir -p /app/images && chown -R bot:bot /app
 
 USER bot

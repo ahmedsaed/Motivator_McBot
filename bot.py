@@ -5,6 +5,7 @@ Configuration comes from environment variables (see .env.example). A legacy
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -29,7 +30,9 @@ MAX_LENGTH = 280
 # route. Tweepy still targets v1.1, so we upload here and fall back to tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
 
-QUOTE_API_URL = "https://api.quotable.io/random"
+# api.quotable.io is defunct, so quotes come from a local dataset built by
+# scripts/fetch_quotes.py. Set QUOTE_API_URL to use a remote source instead.
+QUOTES_FILE = Path(__file__).resolve().parent / "data" / "quotes.json"
 UNSPLASH_API_URL = "https://api.unsplash.com/photos/random"
 
 IMAGE_SIZE = (1200, 600)
@@ -58,6 +61,8 @@ class Settings:
     image_query: str = "mountains lake nature"
     font_path: str = ""
     output_path: Path = Path("images/output_image.jpg")
+    quotes_file: Path = QUOTES_FILE
+    quote_api_url: str = ""
 
     @classmethod
     def from_env(cls):
@@ -81,6 +86,8 @@ class Settings:
             image_query=value("IMAGE_QUERY", default="mountains lake nature"),
             font_path=value("FONT_PATH"),
             output_path=Path(value("OUTPUT_PATH", default="images/output_image.jpg")),
+            quotes_file=Path(value("QUOTES_FILE", default=str(QUOTES_FILE))),
+            quote_api_url=value("QUOTE_API_URL"),
         )
 
     def missing_credentials(self):
@@ -158,23 +165,57 @@ def generate_random_color():
     return "#" + "".join(choice("0123456789ABCDEF") for _ in range(6))
 
 
-def fetch_quote():
-    """Fetch a quote, falling back to the built-in list if the API is down."""
-    params = {
-        "tags": "inspirational|success|motivational|leadership",
-        "maxLength": 220,
-    }
-
-    log.info("Fetching quote")
+def load_quotes(quotes_file):
+    """Return the quote strings from the bundled dataset, or [] if unusable."""
     try:
-        response = requests.get(QUOTE_API_URL, params=params, timeout=HTTP_TIMEOUT)
+        with open(quotes_file, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError) as error:
+        log.warning("Couldn't read %s: %s", quotes_file, error)
+        return []
+
+    quotes = [
+        q["content"] for q in payload.get("quotes", []) if (q or {}).get("content")
+    ]
+    if not quotes:
+        log.warning("No quotes in %s", quotes_file)
+
+    return quotes
+
+
+def fetch_quote_from_api(url):
+    """Fetch one quote from a remote API. Returns None on any failure."""
+    log.info("Fetching quote from %s", url)
+    try:
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        quote = response.json()["content"]
-        log.info("Quote fetched successfully")
-        return quote
-    except (requests.RequestException, ValueError, KeyError) as error:
-        log.warning("Couldn't fetch quote (%s); using built-in list", error)
-        return get_hard_coded_quote()
+        payload = response.json()
+        if isinstance(payload, list) and payload:
+            payload = payload[0]
+        quote = payload.get("content") or payload.get("q") or payload.get("quote")
+        if quote:
+            return quote.strip()
+        log.warning("No quote field in the response from %s", url)
+    except (requests.RequestException, ValueError, AttributeError) as error:
+        log.warning("Couldn't fetch quote from %s: %s", url, error)
+
+    return None
+
+
+def fetch_quote(settings):
+    """Pick a quote: the optional remote API first, then the local dataset."""
+    if settings.quote_api_url:
+        quote = fetch_quote_from_api(settings.quote_api_url)
+        if quote:
+            return quote
+        log.info("Falling back to the local dataset")
+
+    quotes = load_quotes(settings.quotes_file)
+    if quotes:
+        return choice(quotes)
+
+    log.warning("Using the built-in quote list")
+    return get_hard_coded_quote()
 
 
 def fetch_background_image(settings):
@@ -406,7 +447,7 @@ def build_tweet_body(quote, photographer):
 
 
 def run_once(settings, dry_run=False):
-    quote = fetch_quote()
+    quote = fetch_quote(settings)
     background_image_url, photographer = fetch_background_image(settings)
 
     image_path = setup_image(

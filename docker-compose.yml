@@ -5,9 +5,9 @@ services:
     container_name: motivator-mcbot
     env_file: .env
     environment:
-      # Post once every 24h. Remove this to make the container post once and exit.
-      POST_INTERVAL_SECONDS: "${POST_INTERVAL_SECONDS:-86400}"
-    restart: unless-stopped
+      # Log timestamps in local time. The posting schedule itself comes from the
+      # host (systemd timer or cron) — see "Scheduling" in the README.
+      TZ: "${TZ:-Africa/Cairo}"
     volumes:
       # A named volume keeps the ownership the image sets, so the unprivileged
       # container user can write to it. A bind mount such as ./images:/app/images
