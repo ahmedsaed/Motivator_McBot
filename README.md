@@ -54,7 +54,7 @@ $EDITOR .env                        # fill in credentials
 
 ```bash
 docker build -t motivator-mcbot .
-docker run --rm --env-file .env -v "$PWD/images:/app/images" motivator-mcbot --dry-run
+docker run --rm --env-file .env -v motivator-images:/app/images motivator-mcbot --dry-run
 ```
 
 Prebuilt multi-arch images (amd64 + arm64) are published to GHCR on every push
@@ -67,6 +67,19 @@ docker pull ghcr.io/ahmedsaed/motivator_mcbot:latest
 The container runs as a non-root user and exits after a single post, which suits
 a cron-style scheduler. Set `POST_INTERVAL_SECONDS` to make it a long-running
 service instead.
+
+Rendered images go to a named volume rather than a bind mount. Docker creates a
+missing bind-mount directory owned by root, which the unprivileged container user
+cannot write to. If you would rather have the images on the host filesystem,
+create the directory with matching ownership first:
+
+```bash
+mkdir -p images && sudo chown 10001:10001 images
+```
+
+then swap the volume line in `docker-compose.yml` for `./images:/app/images`.
+Without that `chown` the bot logs a warning and writes to a temp file inside the
+container instead of failing.
 
 ## Deployment
 
@@ -139,7 +152,10 @@ sudo systemctl enable --now motivator.timer
   `Response to tweet:` and a tweet id.
 - A 401 means bad credentials; a 403 usually means the app is not set to Read
   and Write, or the access tokens predate that change.
-- The most recent rendered image is written to `images/output_image.jpg`.
+- The most recent rendered image is in the `images` volume; copy it out with
+  `docker compose cp motivator:/app/images/output_image.jpg .`
+- `Couldn't write ... falling back to /tmp` means the output directory is not
+  writable by the container user; see the bind-mount note above.
 
 ## Notes on the X API
 

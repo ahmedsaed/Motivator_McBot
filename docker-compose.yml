@@ -9,5 +9,11 @@ services:
       POST_INTERVAL_SECONDS: "${POST_INTERVAL_SECONDS:-86400}"
     restart: unless-stopped
     volumes:
-      # Keeps the most recently rendered image visible on the host.
-      - ./images:/app/images
+      # A named volume keeps the ownership the image sets, so the unprivileged
+      # container user can write to it. A bind mount such as ./images:/app/images
+      # would be created root-owned by Docker and the container could not write
+      # there — see the README if you want the images on the host filesystem.
+      - images:/app/images
+
+volumes:
+  images:
