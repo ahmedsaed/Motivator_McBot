@@ -311,3 +311,4 @@ endpoint itself. A 401 means the keys are wrong.
 | `scripts/fetch_quotes.py` | Rebuilds `data/quotes.json` from the upstream dataset |
 | `data/quotes.json` | The bundled quote dataset |
 | `old-bot.js` / `bot-example.py` | Earlier versions, kept for reference |
+| `ROADMAP.md` | Why X is currently blocked, and where this goes next |
