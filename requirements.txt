@@ -1,0 +1,6 @@
+# Direct dependencies only — transitive ones are resolved by pip.
+# Regenerate a fully pinned lock with: pip freeze > requirements.lock.txt
+Pillow==12.3.0
+requests==2.34.2
+requests-oauthlib==2.0.0
+tweepy==4.17.0

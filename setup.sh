@@ -1,8 +1,20 @@
 #!/bin/bash
-python -m venv twitter-env
-source ./twitter-env/bin/activate
-pip install -r ./requirments.txt
-deactivate
+# Local development setup. For deployment, prefer the container (see README).
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+python3 -m venv .venv
+./.venv/bin/pip install --upgrade pip
+./.venv/bin/pip install -r requirements.txt
+
 mkdir -p images
-wget https://www.freefontspro.com/d/14454/arial.zip
-unzip arial.zip arial.ttf
+
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "Created .env — fill in your API credentials before running the bot."
+fi
+
+echo
+echo "Done. Try a render that does not post anything:"
+echo "  ./.venv/bin/python bot.py --dry-run"

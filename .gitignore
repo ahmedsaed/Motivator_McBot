@@ -1,6 +1,9 @@
 __pycache__
+.venv
 twitter-env
 config.py
 output_image.jpg
 images
 arial*
+.env
+logs

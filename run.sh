@@ -1,44 +1,32 @@
 #!/bin/bash
+# Wrapper for running the bot from cron on a machine with a local checkout.
+# LOG_FILE can be overridden; it defaults to a log next to this script.
+set -euo pipefail
 
-log_file="/home/ahmed/Documents/logs/motivator_bot.log"
+cd "$(dirname "$0")"
 
-# Check if the directory doesn't exist
-if [ ! -d "$(dirname "$log_file")" ]; then
-    mkdir -p "$(dirname "$log_file")"
+log_file="${LOG_FILE:-$PWD/logs/motivator_bot.log}"
+mkdir -p "$(dirname "$log_file")"
+
+# Load credentials from .env if present.
+if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
 fi
 
-# Create the file
-if [ ! -e "$log_file" ]; then
-    touch "$log_file"
-fi
+{
+    printf '+%s+\n' "$(printf '=%.0s' {1..50})"
+    printf '| %-48s |\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+    printf '+%s+\n' "$(printf '=%.0s' {1..50})"
+} >> "$log_file"
 
-# Activate the virtual environment
-source ./twitter-env/bin/activate
+status=0
+./.venv/bin/python bot.py >> "$log_file" 2>&1 || status=$?
 
-# Get the current date and time
-current_date=$(date '+%Y-%m-%d %H:%M:%S')
-
-# Calculate the box width and padding
-box_width=50
-padding=$((($box_width - ${#current_date}) / 2))
-
-# Create the box with centered date
-box=$(printf "%${padding}s%s%${padding}s" "" "$current_date" "")
-
-# Print the box to the log file
-echo "+$(printf '=%.0s' $(seq 1 $box_width))+" >> $log_file
-echo "|$box|" >> $log_file
-echo "+$(printf '=%.0s' $(seq 1 $box_width))+" >> $log_file
-
-# Execute the Python script
-python bot.py >> $log_file 2>&1
-
-# Deactivate the virtual environment
-deactivate
-
-# send a notification
-if command -v "notify" &> /dev/null; then
+if [ $status -eq 0 ] && command -v notify &> /dev/null; then
     notify "MotivatorMcBot tweeted successfully"
-else
-    echo "notify is not installed."
 fi
+
+exit $status
