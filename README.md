@@ -17,8 +17,11 @@ The four X credentials are required; everything else is optional.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `API_KEY`, `API_SECRET` | yes | X app consumer keys |
-| `ACCESS_TOKEN`, `ACCESS_TOKEN_SECRET` | yes | X user access tokens |
+| `CLIENT_ID`, `CLIENT_SECRET` | yes | OAuth 2.0 client from console.x.com |
+| `REFRESH_TOKEN` | yes | From `scripts/authorize.py`; traded for an access token each run |
+| `TOKEN_STORE` | no | Where a rotated refresh token is written (default `state/token.json`) |
+| `API_KEY`, `API_SECRET` | legacy | OAuth 1.0a consumer keys, used only if no `CLIENT_ID` |
+| `ACCESS_TOKEN`, `ACCESS_TOKEN_SECRET` | legacy | OAuth 1.0a user tokens |
 | `UNSPLASH_API_KEY` | no | Background photos; omit for a solid colour |
 | `IMAGE_QUERY` | no | Unsplash search terms (default `mountains lake nature`) |
 | `FONT_PATH` | no | Override the bold sans font used for rendering |
@@ -34,13 +37,40 @@ keep working without changes.
 
 ### Getting credentials
 
-1. Create a project and app at the [X developer portal](https://developer.x.com/en/portal/dashboard).
-2. Set the app's User authentication settings to **Read and Write**.
-3. Generate the consumer keys and the access token/secret. Regenerate the access
-   tokens if you changed permissions after creating them — otherwise posting
-   fails with a 403.
-4. Optionally register an app at [Unsplash](https://unsplash.com/developers) for
+The Free access tier no longer includes general API access, and X replaced its
+tiered plans with pay-per-usage credits in February 2026. An App on the old Free
+plan gets `403 client-not-enrolled` on v2 endpoints and a bare `503` from the
+media endpoint. Posting costs $0.015 per request, so one post a day is roughly
+$0.46 a month — but note that a post **containing a URL** costs $0.200, more
+than thirteen times as much.
+
+1. Create the App at [console.x.com](https://console.x.com) and buy credits.
+2. Set its type to **Automated App or Bot**. That makes it a confidential
+   client, which is what issues a client secret.
+3. Enable OAuth 2.0 and register `http://127.0.0.1:8721/callback` as a callback
+   URL.
+4. Note the **Client ID** and **Client Secret**.
+5. Run the authorization once to get a refresh token:
+
+   ```bash
+   python scripts/authorize.py --client-id ... --client-secret ...
+   ```
+
+   It asks for `tweet.read tweet.write users.read media.write offline.access`.
+   `offline.access` is what makes X issue a refresh token at all, and
+   `media.write` is what allows the image upload.
+6. Put `CLIENT_ID`, `CLIENT_SECRET` and `REFRESH_TOKEN` in `.env`.
+7. Optionally register an app at [Unsplash](https://unsplash.com/developers) for
    the background photos.
+
+OAuth 2.0 access tokens expire after two hours, so the bot never stores one: it
+trades the refresh token for a fresh access token on every run. X can return a
+new refresh token each time, which the bot writes to `TOKEN_STORE` — in Docker
+that is a named volume, so it survives restarts. If that file cannot be written
+the bot warns, because the next run may then fail.
+
+OAuth 1.0a still works and is used automatically when `CLIENT_ID` is unset, but
+it cannot reach the v2 media endpoint on a pay-per-usage App.
 
 ## Quotes
 
@@ -268,6 +298,7 @@ endpoint itself. A 401 means the keys are wrong.
 | `.github/workflows/build.yml` | Smoke test + multi-arch image build |
 | `.github/workflows/post.yml` | Scheduled posting |
 | `setup.sh` / `run.sh` | Local venv setup and cron wrapper |
+| `scripts/authorize.py` | One-time OAuth 2.0 flow that prints a refresh token |
 | `scripts/fetch_quotes.py` | Rebuilds `data/quotes.json` from the upstream dataset |
 | `data/quotes.json` | The bundled quote dataset |
 | `old-bot.js` / `bot-example.py` | Earlier versions, kept for reference |

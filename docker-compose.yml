@@ -9,6 +9,9 @@ services:
       # every day, and sleeps in between. No host cron or systemd needed.
       TZ: "${TZ:-Africa/Cairo}"
       POST_AT: "${POST_AT:-08:00}"
+      # X hands back a new refresh token on refresh, so it has to be stored
+      # somewhere that survives a restart.
+      TOKEN_STORE: /app/state/token.json
     restart: unless-stopped
     volumes:
       # A named volume keeps the ownership the image sets, so the unprivileged
@@ -16,6 +19,8 @@ services:
       # would be created root-owned by Docker and the container could not write
       # there — see the README if you want the images on the host filesystem.
       - images:/app/images
+      - state:/app/state
 
 volumes:
   images:
+  state:
