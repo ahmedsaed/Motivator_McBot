@@ -28,9 +28,14 @@ log = logging.getLogger("motivator")
 # Maximum tweet length
 MAX_LENGTH = 280
 
-# X retired the v1.1 media/upload endpoint in March 2025; v2 is the supported
-# route. Tweepy still targets v1.1, so we upload here and fall back to tweepy.
+# X retired the v1.1 media/upload endpoint in March 2025 and tweepy still
+# targets it, so media is uploaded here against v2 rather than through tweepy.
 MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
+USERS_ME_URL = "https://api.x.com/2/users/me"
+# X's media endpoint returns 503 "over capacity" intermittently, so retry
+# before giving up. Status codes worth another attempt:
+MEDIA_UPLOAD_ATTEMPTS = 4
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 # api.quotable.io is defunct, so quotes come from a local dataset built by
 # scripts/fetch_quotes.py. Set QUOTE_API_URL to use a remote source instead.
@@ -382,8 +387,45 @@ def save_canvas(canvas, output_path):
     return fallback
 
 
+class MediaUploadError(Exception):
+    """Raised when the image could not be uploaded to X."""
+
+
+def upload_media_v2(oauth, image_path):
+    """One POST to the v2 media endpoint. Returns (media_id, should_retry)."""
+    try:
+        with open(image_path, "rb") as handle:
+            response = oauth.post(
+                MEDIA_UPLOAD_URL,
+                files={"media": (image_path.name, handle, "image/jpeg")},
+                data={"media_category": "tweet_image"},
+                timeout=60,
+            )
+    except requests.RequestException as error:
+        log.warning("v2 media upload errored: %s", error)
+        return None, True
+
+    if response.ok:
+        try:
+            payload = response.json()
+        except ValueError:
+            log.warning("v2 media upload returned unparseable JSON")
+            return None, False
+        payload = payload.get("data", payload)
+        media_id = payload.get("id") or payload.get("media_id_string")
+        if media_id:
+            return media_id, False
+        log.warning("v2 media upload response had no media id: %s", response.text[:200])
+        return None, False
+
+    log.warning(
+        "v2 media upload failed (%s): %s", response.status_code, response.text[:200]
+    )
+    return None, response.status_code in RETRYABLE_STATUS
+
+
 def upload_media(settings, image_path):
-    """Upload the image via the X v2 media endpoint, falling back to v1.1."""
+    """Upload the image to X, retrying the v2 endpoint before trying v1.1."""
     oauth = OAuth1Session(
         client_key=settings.api_key,
         client_secret=settings.api_secret,
@@ -391,35 +433,27 @@ def upload_media(settings, image_path):
         resource_owner_secret=settings.access_token_secret,
     )
 
-    try:
-        with open(image_path, "rb") as handle:
-            response = oauth.post(
-                MEDIA_UPLOAD_URL,
-                files={"media": handle},
-                data={"media_category": "tweet_image"},
-                timeout=60,
-            )
-        if response.ok:
-            payload = response.json()
-            payload = payload.get("data", payload)
-            media_id = payload.get("id") or payload.get("media_id_string")
-            if media_id:
-                log.info("Uploaded media via v2 endpoint (id=%s)", media_id)
-                return media_id
-        log.warning(
-            "v2 media upload failed (%s): %s", response.status_code, response.text[:200]
-        )
-    except requests.RequestException as error:
-        log.warning("v2 media upload errored: %s", error)
+    for attempt in range(1, MEDIA_UPLOAD_ATTEMPTS + 1):
+        media_id, should_retry = upload_media_v2(oauth, image_path)
+        if media_id:
+            log.info("Uploaded media via v2 endpoint (id=%s)", media_id)
+            return media_id
+        if not should_retry or attempt == MEDIA_UPLOAD_ATTEMPTS:
+            break
 
-    log.info("Falling back to the v1.1 media upload endpoint")
-    auth = tweepy.OAuth1UserHandler(
-        consumer_key=settings.api_key,
-        consumer_secret=settings.api_secret,
-        access_token=settings.access_token,
-        access_token_secret=settings.access_token_secret,
+        delay = 2**attempt
+        log.info(
+            "Retrying v2 media upload in %ss (attempt %s of %s)",
+            delay,
+            attempt + 1,
+            MEDIA_UPLOAD_ATTEMPTS,
+        )
+        time.sleep(delay)
+
+    raise MediaUploadError(
+        f"{MEDIA_UPLOAD_URL} did not accept the image after "
+        f"{MEDIA_UPLOAD_ATTEMPTS} attempts"
     )
-    return tweepy.API(auth).media_upload(str(image_path)).media_id
 
 
 def post_tweet(settings, body, image_path):
@@ -513,6 +547,79 @@ def sleep_until(target, tz):
         time.sleep(min(remaining, 900))
 
 
+def run_check(settings):
+    """Probe the X API and report what works, without posting anything.
+
+    A 503 on users/me as well as on media upload points at the account or its
+    billing state rather than at anything media-specific: X moved to
+    pay-per-use in February 2026 and several people have reported persistent
+    503s across v2 endpoints afterwards. A 200 there with a 503 on the upload
+    narrows it to the media endpoint.
+    """
+    missing = settings.missing_credentials()
+    if missing:
+        log.error("Missing required credentials: %s", ", ".join(missing))
+        return 1
+
+    oauth = OAuth1Session(
+        client_key=settings.api_key,
+        client_secret=settings.api_secret,
+        resource_owner_key=settings.access_token,
+        resource_owner_secret=settings.access_token_secret,
+    )
+
+    log.info("GET %s", USERS_ME_URL)
+    try:
+        response = oauth.get(USERS_ME_URL, timeout=30)
+        log.info("  -> %s %s", response.status_code, response.text[:300])
+        identity_ok = response.ok
+    except requests.RequestException as error:
+        log.error("  -> request failed: %s", error)
+        identity_ok = False
+
+    log.info("Rendering a throwaway image to upload")
+    image_path = setup_image(
+        "Diagnostic upload, not posted",
+        None,
+        Path(tempfile.gettempdir()) / "motivator_check.jpg",
+        settings.font_path,
+    )
+
+    log.info("POST %s", MEDIA_UPLOAD_URL)
+    try:
+        with open(image_path, "rb") as handle:
+            response = oauth.post(
+                MEDIA_UPLOAD_URL,
+                files={"media": (image_path.name, handle, "image/jpeg")},
+                data={"media_category": "tweet_image"},
+                timeout=60,
+            )
+        log.info("  -> %s %s", response.status_code, response.text[:300])
+        upload_ok = response.ok
+    except requests.RequestException as error:
+        log.error("  -> request failed: %s", error)
+        upload_ok = False
+
+    log.info("-" * 60)
+    if identity_ok and upload_ok:
+        log.info("Both calls succeeded; media upload is working.")
+    elif identity_ok:
+        log.info(
+            "Credentials work and the v2 API answers, but media upload does not. "
+            "The problem is specific to the media endpoint."
+        )
+    else:
+        log.info(
+            "users/me did not succeed either, so this is not media-specific. "
+            "Check the app's access level and billing in the developer portal: "
+            "a 401 means bad keys, a 403 means the app lacks the access, and a "
+            "503 on every v2 endpoint usually means the project is not on a "
+            "working plan."
+        )
+
+    return 0 if (identity_ok and upload_ok) else 1
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -542,6 +649,11 @@ def parse_args(argv=None):
         action="store_true",
         help="post immediately and exit, ignoring --at and --interval",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="probe the X API and report what works, without posting",
+    )
     return parser.parse_args(argv)
 
 
@@ -556,6 +668,9 @@ def main(argv=None):
     settings = Settings.from_env()
     if args.output:
         settings.output_path = args.output
+
+    if args.check:
+        return run_check(settings)
 
     if not args.dry_run:
         missing = settings.missing_credentials()

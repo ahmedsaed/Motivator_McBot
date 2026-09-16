@@ -230,6 +230,23 @@ to Tweepy's v1.1 path if that fails. Posting itself goes through Tweepy's v2
 client. The free API tier allows a limited number of posts per month, which is
 ample for one post a day.
 
+`POST /2/media/upload` returns 503 for some accounts. The bot retries four
+times with a growing delay (2s, 4s, 8s) and then fails the run — it does not
+fall back to v1.1, which X retired, and it does not post without the image.
+
+If posting fails, `--check` probes the API without posting anything:
+
+```bash
+docker compose run --rm motivator --check
+```
+
+It calls `GET /2/users/me` and then attempts a media upload, printing the status
+and body of each. A 503 on both is not media-specific: X replaced its tiered
+plans with pay-per-use in February 2026, and persistent 503s across v2 endpoints
+have been reported by accounts whose plan or billing is not in a working state.
+A 200 on `users/me` with a 503 on the upload narrows the problem to the media
+endpoint. A 401 means the keys are wrong; a 403 means the app lacks the access.
+
 ## Repository layout
 
 | Path | Purpose |
