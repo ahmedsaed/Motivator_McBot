@@ -575,7 +575,15 @@ def run_check(settings):
         log.info("  -> %s %s", response.status_code, response.text[:300])
         identity_ok = response.ok
         try:
-            reason = response.json().get("reason", "")
+            payload = response.json()
+            reason = payload.get("reason", "")
+            client_id = payload.get("client_id")
+            if client_id:
+                log.info(
+                    "  -> X says these keys belong to App %s; check that this "
+                    "matches the App inside your Project in the developer portal",
+                    client_id,
+                )
         except ValueError:
             pass
     except requests.RequestException as error:
@@ -610,12 +618,14 @@ def run_check(settings):
         log.info("Both calls succeeded; media upload is working.")
     elif reason == "client-not-enrolled":
         log.info(
-            "The App these keys belong to is not attached to a Project, so the "
-            "X API v2 rejects it. Nothing in this repository can work around "
-            "that. In the developer portal, attach the App to a Project (or "
-            "create the App inside one), then regenerate the access token and "
-            "secret and put the new values in .env. The media endpoint's 503 "
-            "is the same problem reported with a less helpful status code."
+            "The X API v2 does not consider these keys to belong to an App in "
+            "a Project. Either that App is not in one, or the keys came from a "
+            "different App than the one your Project holds -- compare the App "
+            "id above with the App inside the Project in the developer portal. "
+            "The consumer key is what identifies the App, so all four values "
+            "have to come from the same App. Nothing in this repository can "
+            "work around it. The media endpoint's 503 is the same problem "
+            "reported with a less helpful status code."
         )
     elif identity_ok:
         log.info(
